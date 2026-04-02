@@ -81,9 +81,9 @@ export default function SearchFilter({ onSearch, className, compact = false }: S
   }
 
   return (
-    <div className={cn("w-full max-w-5xl mx-auto", className)}>
-      {/* Tabs — centered above search bar */}
-      <div className="flex items-center justify-center gap-1 mb-3">
+    <div className={cn("w-full", className)}>
+      {/* Tabs */}
+      <div className="flex items-center gap-1 mb-3">
         {(['buy', 'rent'] as const).map((tab) => (
           <button
             key={tab}
