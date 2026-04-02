@@ -81,16 +81,18 @@ export default function SearchFilter({ onSearch, className, compact = false }: S
   }
 
   return (
-    <div className={cn("w-full", className)}>
-      {/* Tabs */}
-      <div className="flex items-center gap-1 mb-3">
+    <div className={cn("w-full max-w-5xl mx-auto", className)}>
+      {/* Tabs — centered above search bar */}
+      <div className="flex items-center justify-center gap-1 mb-3">
         {(['buy', 'rent'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={cn(
-              "px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer",
-              activeTab === tab ? "bg-teal-700 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
+              "px-5 py-2 text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer",
+              activeTab === tab
+                ? "bg-teal-700 text-white shadow-sm"
+                : "text-slate-500 hover:text-teal-700 hover:bg-slate-100"
             )}
           >
             {tab === 'buy' ? 'Acheter' : 'Louer'}
@@ -100,7 +102,7 @@ export default function SearchFilter({ onSearch, className, compact = false }: S
 
       {/* Search Bar */}
       <div className="bg-white rounded-2xl shadow-search border border-slate-200 overflow-hidden">
-        {/* Top row */}
+        {/* Search row */}
         <div className={cn("flex items-center", compact ? "gap-0.5 p-1.5" : "gap-1 p-2")}>
           <div className="flex-1 min-w-0 px-2">
             <Input

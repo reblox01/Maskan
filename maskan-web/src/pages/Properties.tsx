@@ -60,7 +60,7 @@ export default function Properties() {
       {/* Header */}
       <div className="sticky top-16 z-40 bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <SearchFilter compact className="max-w-4xl" onSearch={handleSearch} />
+          <SearchFilter compact onSearch={handleSearch} />
 
           {/* Toolbar */}
           <div className="flex items-center justify-between mt-4">
