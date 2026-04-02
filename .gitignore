@@ -1,0 +1,33 @@
+# Python/Django
+*.pyc
+__pycache__/
+*.sqlite3
+media/
+staticfiles/
+
+# Node/Vite
+node_modules/
+dist/
+build/
+.vite/
+
+# IDE + OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.agent
+.gemini
+.opencode
+.github
+.venv/
+
+# Env files
+.env
+.env.*
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
