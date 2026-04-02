@@ -59,16 +59,6 @@ class PropertyViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated(), IsAgent()]
         return [permissions.IsAuthenticated(), IsOwner()]
 
-    def get_queryset(self):
-        qs = super().get_queryset()
-        # Public sees only published properties
-        if self.action == "list":
-            qs = qs.filter(is_published=True)
-        # Agents see their own properties in their dashboard
-        if self.action == "my_properties" and self.request.user.is_authenticated:
-            qs = qs.filter(agent=self.request.user)
-        return qs
-
     def perform_create(self, serializer):
         serializer.save(agent=self.request.user)
 
