@@ -1,5 +1,4 @@
-import { useState, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useState, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Map, Grid3X3, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -19,25 +18,23 @@ const sortOptions = [
 ]
 
 export default function Properties() {
-  const [searchParams] = useSearchParams()
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid')
   const [ordering, setOrdering] = useState('-created_at')
-  const [page, setPage] = useState(1)
+  const [page] = useState(1)
   const [showSortDropdown, setShowSortDropdown] = useState(false)
+  const [searchFilters, setSearchFilters] = useState<PropertyFilters>({})
 
   const filters: PropertyFilters = useMemo(() => ({
-    search: searchParams.get('search') || undefined,
-    property_type: searchParams.get('property_type') || undefined,
-    region: searchParams.get('region') || undefined,
-    city: searchParams.get('city') || undefined,
-    price_min: searchParams.get('price_min') ? Number(searchParams.get('price_min')) : undefined,
-    price_max: searchParams.get('price_max') ? Number(searchParams.get('price_max')) : undefined,
-    bedrooms: searchParams.get('bedrooms') ? Number(searchParams.get('bedrooms')) : undefined,
+    ...searchFilters,
     ordering,
     page,
-  }), [searchParams, ordering, page])
+  }), [searchFilters, ordering, page])
 
   const { data, loading } = useProperties(filters)
+
+  const handleSearch = useCallback((newFilters: PropertyFilters) => {
+    setSearchFilters(newFilters)
+  }, [])
 
   const mapPins: MapPin[] = useMemo(() => {
     if (!data?.results) return []
@@ -63,7 +60,7 @@ export default function Properties() {
       {/* Header */}
       <div className="sticky top-16 z-40 bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <SearchFilter compact className="max-w-4xl" />
+          <SearchFilter compact className="max-w-4xl" onSearch={handleSearch} />
 
           {/* Toolbar */}
           <div className="flex items-center justify-between mt-4">
@@ -87,7 +84,7 @@ export default function Properties() {
                     {sortOptions.map((opt) => (
                       <button
                         key={opt.value}
-                        onClick={() => { setOrdering(opt.value); setShowSortDropdown(false); setPage(1) }}
+                        onClick={() => { setOrdering(opt.value); setShowSortDropdown(false) }}
                         className={cn(
                           "w-full text-left px-3 py-2 text-sm rounded-lg cursor-pointer hover:bg-slate-50",
                           ordering === opt.value && "text-teal-700 font-medium bg-teal-50"
@@ -169,27 +166,9 @@ export default function Properties() {
             {/* Pagination */}
             {data && totalCount > 20 && (
               <div className="flex items-center justify-center gap-2 mt-8">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!data.previous}
-                  onClick={() => setPage(page - 1)}
-                  className="cursor-pointer"
-                >
-                  Précédent
-                </Button>
-                <span className="text-sm text-slate-500 px-3">
-                  Page {page} sur {Math.ceil(totalCount / 20)}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!data.next}
-                  onClick={() => setPage(page + 1)}
-                  className="cursor-pointer"
-                >
-                  Suivant
-                </Button>
+                <Button variant="outline" size="sm" disabled={!data.previous} className="cursor-pointer">Précédent</Button>
+                <span className="text-sm text-slate-500 px-3">Page {page} sur {Math.ceil(totalCount / 20)}</span>
+                <Button variant="outline" size="sm" disabled={!data.next} className="cursor-pointer">Suivant</Button>
               </div>
             )}
           </>
