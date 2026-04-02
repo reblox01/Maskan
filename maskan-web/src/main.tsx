@@ -7,12 +7,10 @@ import './index.css'
 import App from './App'
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <BrowserRouter>
-      <TooltipProvider>
-        <App />
-        <Toaster />
-      </TooltipProvider>
-    </BrowserRouter>
-  </StrictMode>,
+  <BrowserRouter>
+    <TooltipProvider>
+      <App />
+      <Toaster />
+    </TooltipProvider>
+  </BrowserRouter>,
 )
