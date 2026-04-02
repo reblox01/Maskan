@@ -39,21 +39,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    fetchProfile()
+    // Only fetch profile if we have a token
+    if (localStorage.getItem('access_token')) {
+      fetchProfile()
+    } else {
+      setLoading(false)
+    }
   }, [fetchProfile])
 
   const login = async (email: string, password: string) => {
     const res = await api.post('/auth/login/', { email, password })
+    localStorage.setItem('access_token', res.data.access)
+    localStorage.setItem('refresh_token', res.data.refresh)
     setUser(res.data.user)
   }
 
   const register = async (data: RegisterData) => {
     const res = await api.post('/auth/register/', data)
+    localStorage.setItem('access_token', res.data.access)
+    localStorage.setItem('refresh_token', res.data.refresh)
     setUser(res.data.user)
   }
 
   const logout = async () => {
-    await api.post('/auth/logout/')
+    try {
+      const refresh = localStorage.getItem('refresh_token')
+      if (refresh) {
+        await api.post('/auth/logout/', { refresh })
+      }
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
     setUser(null)
   }
 

@@ -27,33 +27,12 @@ from .serializers import (
 User = get_user_model()
 
 
-def set_jwt_cookies(response, user):
+def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
-    access_token = str(refresh.access_token)
-    refresh_token = str(refresh)
-
-    from django.conf import settings
-    jwt_settings = settings.SIMPLE_JWT
-
-    response.set_cookie(
-        key=jwt_settings["AUTH_COOKIE"],
-        value=access_token,
-        httponly=jwt_settings["AUTH_COOKIE_HTTP_ONLY"],
-        secure=jwt_settings["AUTH_COOKIE_SECURE"],
-        samesite=jwt_settings["AUTH_COOKIE_SAMESITE"],
-        path=jwt_settings["AUTH_COOKIE_PATH"],
-        max_age=int(jwt_settings["ACCESS_TOKEN_LIFETIME"].total_seconds()),
-    )
-    response.set_cookie(
-        key=jwt_settings["AUTH_COOKIE_REFRESH"],
-        value=refresh_token,
-        httponly=jwt_settings["AUTH_COOKIE_HTTP_ONLY"],
-        secure=jwt_settings["AUTH_COOKIE_SECURE"],
-        samesite=jwt_settings["AUTH_COOKIE_SAMESITE"],
-        path=jwt_settings["AUTH_COOKIE_PATH"],
-        max_age=int(jwt_settings["REFRESH_TOKEN_LIFETIME"].total_seconds()),
-    )
-    return response
+    return {
+        "access": str(refresh.access_token),
+        "refresh": str(refresh),
+    }
 
 
 @method_decorator(ratelimit(key="ip", rate="10/m", method="POST"), name="post")
@@ -66,16 +45,20 @@ class RegisterView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        # If user selected "agent" at registration, auto-create application
         selected_role = request.data.get("role", "client")
         if selected_role == "agent":
             AgentApplication.objects.create(user=user)
 
-        response = Response(
-            {"user": UserSerializer(user).data, "message": "Registration successful."},
+        tokens = get_tokens_for_user(user)
+        return Response(
+            {
+                "user": UserSerializer(user).data,
+                "access": tokens["access"],
+                "refresh": tokens["refresh"],
+                "message": "Registration successful.",
+            },
             status=status.HTTP_201_CREATED,
         )
-        return set_jwt_cookies(response, user)
 
 
 @method_decorator(ratelimit(key="ip", rate="10/m", method="POST"), name="post")
@@ -98,31 +81,30 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        response = Response(
-            {"user": UserSerializer(user).data, "message": "Login successful."},
+        tokens = get_tokens_for_user(user)
+        return Response(
+            {
+                "user": UserSerializer(user).data,
+                "access": tokens["access"],
+                "refresh": tokens["refresh"],
+                "message": "Login successful.",
+            },
             status=status.HTTP_200_OK,
         )
-        return set_jwt_cookies(response, user)
 
 
 class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        from django.conf import settings
-        refresh_token = request.COOKIES.get(settings.SIMPLE_JWT["AUTH_COOKIE_REFRESH"])
-
-        if refresh_token:
-            try:
+        try:
+            refresh_token = request.data.get("refresh")
+            if refresh_token:
                 token = RefreshToken(refresh_token)
                 token.blacklist()
-            except Exception:
-                pass
-
-        response = Response({"message": "Logged out successfully."}, status=status.HTTP_200_OK)
-        response.delete_cookie(settings.SIMPLE_JWT["AUTH_COOKIE"])
-        response.delete_cookie(settings.SIMPLE_JWT["AUTH_COOKIE_REFRESH"])
-        return response
+        except Exception:
+            pass
+        return Response({"message": "Logged out successfully."}, status=status.HTTP_200_OK)
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
@@ -141,38 +123,8 @@ class CookieTokenRefreshView(BaseTokenRefreshView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):
-        from django.conf import settings
-        refresh_token = request.COOKIES.get(settings.SIMPLE_JWT["AUTH_COOKIE_REFRESH"])
+        return super().post(request, *args, **kwargs)
 
-        if not refresh_token:
-            return Response({"error": "Refresh token not found."}, status=status.HTTP_401_UNAUTHORIZED)
-
-        request.data["refresh"] = refresh_token
-        response = super().post(request, *args, **kwargs)
-
-        if response.status_code == 200:
-            new_refresh = response.data.get("refresh")
-            if new_refresh:
-                response.set_cookie(
-                    key=settings.SIMPLE_JWT["AUTH_COOKIE_REFRESH"],
-                    value=new_refresh,
-                    httponly=True, secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
-                    samesite="Strict", path="/",
-                    max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
-                )
-            access_token = response.data.get("access")
-            if access_token:
-                response.set_cookie(
-                    key=settings.SIMPLE_JWT["AUTH_COOKIE"],
-                    value=access_token,
-                    httponly=True, secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
-                    samesite="Strict", path="/",
-                    max_age=int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()),
-                )
-        return response
-
-
-# --- Developer Mode ---
 
 class DeveloperModeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -188,12 +140,9 @@ class DeveloperModeView(APIView):
         return Response({"developer_mode": request.user.developer_mode})
 
 
-# --- Admin User Management ---
-
 class AdminUserListView(generics.ListAPIView):
     serializer_class = AdminUserListSerializer
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = None
     pagination_class = None
 
     def get_queryset(self):
@@ -220,8 +169,6 @@ class AdminUserDetailView(generics.RetrieveUpdateDestroyAPIView):
             return User.objects.none()
         return User.objects.all()
 
-
-# --- Application Fields ---
 
 class ApplicationFieldViewSet(viewsets.ModelViewSet):
     queryset = ApplicationField.objects.all()
@@ -258,10 +205,7 @@ class ApplicationFieldViewSet(viewsets.ModelViewSet):
         return Response({"message": "Order updated."})
 
 
-# --- Agent Applications ---
-
 class AgentApplicationView(APIView):
-    """Client: get own application or submit new one."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
@@ -283,7 +227,6 @@ class AgentApplicationView(APIView):
 
 
 class AgentApplicationListView(generics.ListAPIView):
-    """Admin: list all applications."""
     serializer_class = AgentApplicationListSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
@@ -299,7 +242,6 @@ class AgentApplicationListView(generics.ListAPIView):
 
 
 class AgentApplicationReviewView(APIView):
-    """Admin: approve or reject an application."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk):
@@ -330,7 +272,6 @@ class AgentApplicationReviewView(APIView):
         app.reviewed_by = request.user
         app.save()
 
-        # If approved, upgrade user role
         if new_status == "approved":
             app.user.role = "agent"
             app.user.save(update_fields=["role"])

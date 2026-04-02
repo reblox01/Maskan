@@ -26,7 +26,18 @@ class PropertyViewSet(viewsets.ModelViewSet):
     Update/Delete: Owner only.
     """
 
-    queryset = Property.objects.select_related("agent").prefetch_related("images")
+    def get_queryset(self):
+        qs = Property.objects.select_related("agent")
+
+        # Only prefetch images for detail view (list doesn't need full images)
+        if self.action in ("retrieve",):
+            qs = qs.prefetch_related("images")
+
+        if self.action == "list":
+            qs = qs.filter(is_published=True)
+        if self.action == "my_properties" and self.request.user.is_authenticated:
+            qs = qs.filter(agent=self.request.user)
+        return qs
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = PropertyFilter
     search_fields = ["title", "description", "city", "region", "address"]
