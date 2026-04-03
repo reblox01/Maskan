@@ -49,7 +49,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
         return PropertyDetailSerializer
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve", "featured", "cities", "regions"):
+        if self.action in ("list", "retrieve", "featured", "cities", "regions", "map_pins"):
             return [permissions.AllowAny()]
         if self.action == "create":
             return [permissions.IsAuthenticated(), IsAgent()]

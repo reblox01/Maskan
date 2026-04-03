@@ -1,13 +1,13 @@
 import { useState, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Map, Grid3X3, ChevronDown } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import SearchFilter from '@/components/SearchFilter'
 import PropertyCard from '@/components/PropertyCard'
-import PropertyMap from '@/components/PropertyMap'
+import FloatingMapButton from '@/components/FloatingMapButton'
 import { useProperties } from '@/hooks/useProperties'
 import { cn } from '@/lib/utils'
-import type { PropertyFilters, MapPin } from '@/types'
+import type { PropertyFilters } from '@/types'
 
 const sortOptions = [
   { value: '-created_at', label: 'Plus récents' },
@@ -18,7 +18,6 @@ const sortOptions = [
 ]
 
 export default function Properties() {
-  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid')
   const [ordering, setOrdering] = useState('-created_at')
   const [page] = useState(1)
   const [showSortDropdown, setShowSortDropdown] = useState(false)
@@ -35,23 +34,6 @@ export default function Properties() {
   const handleSearch = useCallback((newFilters: PropertyFilters) => {
     setSearchFilters(newFilters)
   }, [])
-
-  const mapPins: MapPin[] = useMemo(() => {
-    if (!data?.results) return []
-    return data.results
-      .filter((p) => p.latitude && p.longitude)
-      .map((p) => ({
-        id: p.id,
-        title: p.title,
-        price: p.price,
-        currency: p.currency,
-        property_type: p.property_type,
-        city: p.city,
-        latitude: Number(p.latitude),
-        longitude: Number(p.longitude),
-        status: p.status,
-      }))
-  }, [data])
 
   const totalCount = data?.count || 0
 
@@ -96,30 +78,6 @@ export default function Properties() {
                   </div>
                 )}
               </div>
-
-              {/* View Toggle */}
-              <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={cn(
-                    "p-1.5 rounded-md cursor-pointer transition-colors",
-                    viewMode === 'grid' ? "bg-white shadow-sm text-teal-700" : "text-slate-400"
-                  )}
-                  aria-label="Vue grille"
-                >
-                  <Grid3X3 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode('map')}
-                  className={cn(
-                    "p-1.5 rounded-md cursor-pointer transition-colors",
-                    viewMode === 'map' ? "bg-white shadow-sm text-teal-700" : "text-slate-400"
-                  )}
-                  aria-label="Vue carte"
-                >
-                  <Map className="w-4 h-4" />
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -127,55 +85,52 @@ export default function Properties() {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {viewMode === 'grid' ? (
-          <>
-            {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Array.from({ length: 9 }).map((_, i) => (
-                  <div key={i} className="rounded-xl overflow-hidden">
-                    <div className="aspect-[4/3] bg-slate-100 animate-pulse" />
-                    <div className="p-4 space-y-2">
-                      <div className="h-5 bg-slate-100 rounded animate-pulse w-24" />
-                      <div className="h-4 bg-slate-100 rounded animate-pulse w-32" />
-                      <div className="h-4 bg-slate-100 rounded animate-pulse w-20" />
-                    </div>
-                  </div>
-                ))}
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 9 }).map((_, i) => (
+              <div key={i} className="rounded-xl overflow-hidden">
+                <div className="aspect-[4/3] bg-slate-100 animate-pulse" />
+                <div className="p-4 space-y-2">
+                  <div className="h-5 bg-slate-100 rounded animate-pulse w-24" />
+                  <div className="h-4 bg-slate-100 rounded animate-pulse w-32" />
+                  <div className="h-4 bg-slate-100 rounded animate-pulse w-20" />
+                </div>
               </div>
-            ) : data && data.results.length > 0 ? (
-              <motion.div
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
-                initial="hidden"
-                animate="show"
-                variants={{
-                  hidden: { opacity: 0 },
-                  show: { opacity: 1, transition: { staggerChildren: 0.05 } },
-                }}
-              >
-                {data.results.map((property, i) => (
-                  <PropertyCard key={property.id} property={property} index={i} />
-                ))}
-              </motion.div>
-            ) : (
-              <div className="text-center py-16">
-                <p className="text-slate-500 text-lg">Aucun bien trouvé</p>
-                <p className="text-sm text-slate-400 mt-1">Essayez de modifier vos critères de recherche</p>
-              </div>
-            )}
-
-            {/* Pagination */}
-            {data && totalCount > 20 && (
-              <div className="flex items-center justify-center gap-2 mt-8">
-                <Button variant="outline" size="sm" disabled={!data.previous} className="cursor-pointer">Précédent</Button>
-                <span className="text-sm text-slate-500 px-3">Page {page} sur {Math.ceil(totalCount / 20)}</span>
-                <Button variant="outline" size="sm" disabled={!data.next} className="cursor-pointer">Suivant</Button>
-              </div>
-            )}
-          </>
+            ))}
+          </div>
+        ) : data && data.results.length > 0 ? (
+          <motion.div
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+            initial="hidden"
+            animate="show"
+            variants={{
+              hidden: { opacity: 0 },
+              show: { opacity: 1, transition: { staggerChildren: 0.05 } },
+            }}
+          >
+            {data.results.map((property, i) => (
+              <PropertyCard key={property.id} property={property} index={i} />
+            ))}
+          </motion.div>
         ) : (
-          <PropertyMap pins={mapPins} height="calc(100vh - 200px)" />
+          <div className="text-center py-16">
+            <p className="text-slate-500 text-lg">Aucun bien trouvé</p>
+            <p className="text-sm text-slate-400 mt-1">Essayez de modifier vos critères de recherche</p>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {data && totalCount > 20 && (
+          <div className="flex items-center justify-center gap-2 mt-8">
+            <Button variant="outline" size="sm" disabled={!data.previous} className="cursor-pointer">Précédent</Button>
+            <span className="text-sm text-slate-500 px-3">Page {page} sur {Math.ceil(totalCount / 20)}</span>
+            <Button variant="outline" size="sm" disabled={!data.next} className="cursor-pointer">Suivant</Button>
+          </div>
         )}
       </div>
+
+      {/* Floating Map Button */}
+      <FloatingMapButton />
     </div>
   )
 }
