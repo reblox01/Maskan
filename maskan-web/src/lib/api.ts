@@ -7,7 +7,16 @@ const api = axios.create({
   },
 })
 
-// Add auth token from localStorage
+// Public endpoints that should NOT trigger login redirect
+const publicEndpoints = [
+  '/properties/',
+  '/properties/featured/',
+  '/properties/cities/',
+  '/properties/regions/',
+  '/properties/map-pins/',
+]
+
+// Add auth token from localStorage on every request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("access_token")
   if (token) {
@@ -29,15 +38,6 @@ const processQueue = (error: unknown = null) => {
   })
   failedQueue = []
 }
-
-// Public endpoints that should NOT trigger login redirect
-const publicEndpoints = [
-  '/properties/',
-  '/properties/featured/',
-  '/properties/cities/',
-  '/properties/regions/',
-  '/properties/map-pins/',
-]
 
 api.interceptors.response.use(
   (response) => response,
@@ -63,10 +63,15 @@ api.interceptors.response.use(
         if (!refreshToken) throw new Error("No refresh token")
 
         const res = await axios.post("/api/auth/token/refresh/", { refresh: refreshToken })
-        localStorage.setItem("access_token", res.data.access)
+        const newToken = res.data.access
+        localStorage.setItem("access_token", newToken)
         if (res.data.refresh) {
           localStorage.setItem("refresh_token", res.data.refresh)
         }
+
+        // Update the original request's Authorization header
+        originalRequest.headers.Authorization = `Bearer ${newToken}`
+        
         processQueue()
         return api(originalRequest)
       } catch (refreshError) {
