@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Map, X, BedDouble, Bath, Maximize, ArrowUpRight } from 'lucide-react'
-import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Button } from '@/components/ui/button'
@@ -166,7 +166,28 @@ export default function FloatingMapButton() {
                   <div className="w-8 h-8 border-2 border-teal-700 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : (
-                <MapContainer
+                <div className="w-full h-full">
+                  <style>{`
+                    .floating-map-popup .leaflet-popup-content-wrapper {
+                      border-radius: 12px;
+                      padding: 0;
+                      overflow: hidden;
+                      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+                    }
+                    .floating-map-popup .leaflet-popup-content {
+                      margin: 0;
+                      width: auto !important;
+                    }
+                    .floating-map-popup .leaflet-popup-tip {
+                      box-shadow: none;
+                      background: white;
+                    }
+                    .floating-map-popup a {
+                      text-decoration: none;
+                      color: inherit;
+                    }
+                  `}</style>
+                  <MapContainer
                   center={[33.5731, -7.5898]}
                   zoom={7}
                   style={{ width: '100%', height: '100%' }}
@@ -181,11 +202,14 @@ export default function FloatingMapButton() {
                     if (!pin.latitude || !pin.longitude) return null
                     return (
                       <Marker key={pin.id} position={[pin.latitude, pin.longitude]} icon={pinIcon}>
-                        <PopupCard pin={pin} navigate={navigate} />
+                        <Popup className="floating-map-popup" maxWidth={280} minWidth={260} closeButton={true} offset={[0, -10]}>
+                          <PopupCard pin={pin} navigate={navigate} />
+                        </Popup>
                       </Marker>
                     )
                   })}
                 </MapContainer>
+                </div>
               )}
 
               {/* Pin count */}
