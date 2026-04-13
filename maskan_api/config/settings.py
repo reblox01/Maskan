@@ -30,7 +30,7 @@ INSTALLED_APPS = [
     # Third-party
     "rest_framework",
     "rest_framework_simplejwt",
-    "rest_framework_simplejwt.token_blacklist",
+    # "rest_framework_simplejwt.token_blacklist",  # Disabled - causing issues
     "corsheaders",
     "django_filters",
     # Local
@@ -136,7 +136,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "apps.accounts.authentication.CookiesJWTAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",  # Use header-based auth
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
@@ -162,21 +162,15 @@ REST_FRAMEWORK = {
 }
 
 # ---------------------------------------------------------------------------
-# JWT (Simple JWT)
+# JWT (Simple JWT) - Disabled rotation for stability
 # ---------------------------------------------------------------------------
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=config("JWT_ACCESS_TOKEN_LIFETIME", default=15, cast=int)),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=config("JWT_REFRESH_TOKEN_LIFETIME", default=7, cast=int)),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1440),  # 24 hours
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),  # 30 days
+    "ROTATE_REFRESH_TOKENS": False,  # Disabled - causes issues
+    "BLACKLIST_AFTER_ROTATION": False,
     "UPDATE_LAST_LOGIN": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
-    "AUTH_COOKIE": "access_token",
-    "AUTH_COOKIE_REFRESH": "refresh_token",
-    "AUTH_COOKIE_HTTP_ONLY": True,
-    "AUTH_COOKIE_SECURE": not DEBUG,
-    "AUTH_COOKIE_SAMESITE": "Lax",
-    "AUTH_COOKIE_PATH": "/",
 }
 
 # ---------------------------------------------------------------------------

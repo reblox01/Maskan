@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
-import api from '@/lib/api'
+import axios from 'axios'
 import type { User } from '@/types'
 
 interface AuthContextType {
@@ -27,35 +27,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const fetchProfile = useCallback(async () => {
-    try {
-      const res = await api.get('/auth/profile/')
-      setUser(res.data)
-    } catch {
-      setUser(null)
-    } finally {
-      setLoading(false)
-    }
+  const clearAuth = useCallback(() => {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    setUser(null)
   }, [])
 
-  useEffect(() => {
-    // Only fetch profile if we have a token
-    if (localStorage.getItem('access_token')) {
-      fetchProfile()
-    } else {
+  const fetchProfile = useCallback(async () => {
+    const access = localStorage.getItem('access_token')
+    const refresh = localStorage.getItem('refresh_token')
+    
+    if (!access && !refresh) {
       setLoading(false)
+      return
     }
+
+    try {
+      const res = await axios.get('/api/auth/profile/', {
+        headers: { Authorization: `Bearer ${access}` }
+      })
+      setUser(res.data)
+      setLoading(false)
+      return
+    } catch (err) {
+      if (refresh && err.response?.status === 401) {
+        try {
+          const res = await axios.post('/api/auth/token/refresh/', { refresh })
+          const newAccess = res.data.access
+          localStorage.setItem('access_token', newAccess)
+          if (res.data.refresh) {
+            localStorage.setItem('refresh_token', res.data.refresh)
+          }
+          const profileRes = await axios.get('/api/auth/profile/', {
+            headers: { Authorization: `Bearer ${newAccess}` }
+          })
+          setUser(profileRes.data)
+          setLoading(false)
+          return
+        } catch {
+          // Refresh failed
+        }
+      }
+    }
+
+    clearAuth()
+    setLoading(false)
+  }, [clearAuth])
+
+  useEffect(() => {
+    fetchProfile()
   }, [fetchProfile])
 
   const login = async (email: string, password: string) => {
-    const res = await api.post('/auth/login/', { email, password })
+    const res = await axios.post('/api/auth/login/', { email, password })
     localStorage.setItem('access_token', res.data.access)
     localStorage.setItem('refresh_token', res.data.refresh)
     setUser(res.data.user)
   }
 
   const register = async (data: RegisterData) => {
-    const res = await api.post('/auth/register/', data)
+    const res = await axios.post('/api/auth/register/', data)
     localStorage.setItem('access_token', res.data.access)
     localStorage.setItem('refresh_token', res.data.refresh)
     setUser(res.data.user)
@@ -65,14 +96,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const refresh = localStorage.getItem('refresh_token')
       if (refresh) {
-        await api.post('/auth/logout/', { refresh })
+        await axios.post('/api/auth/logout/', { refresh })
       }
     } catch {
       // ignore
     }
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    setUser(null)
+    clearAuth()
   }
 
   const updateUser = useCallback((data: Partial<User>) => {

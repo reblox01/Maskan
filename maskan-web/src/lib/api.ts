@@ -7,7 +7,6 @@ const api = axios.create({
   },
 })
 
-// Public endpoints that should NOT trigger login redirect
 const publicEndpoints = [
   '/properties/',
   '/properties/featured/',
@@ -16,7 +15,6 @@ const publicEndpoints = [
   '/properties/map-pins/',
 ]
 
-// Add auth token from localStorage on every request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("access_token")
   if (token) {
@@ -45,10 +43,10 @@ api.interceptors.response.use(
     const originalRequest = error.config
     const url = originalRequest?.url || ''
 
-    // Skip redirect for public endpoints
     const isPublic = publicEndpoints.some(ep => url.startsWith(ep))
 
     if (error.response?.status === 401 && !originalRequest._retry && !isPublic) {
+      
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
@@ -69,7 +67,6 @@ api.interceptors.response.use(
           localStorage.setItem("refresh_token", res.data.refresh)
         }
 
-        // Update the original request's Authorization header
         originalRequest.headers.Authorization = `Bearer ${newToken}`
         
         processQueue()
@@ -78,7 +75,6 @@ api.interceptors.response.use(
         processQueue(refreshError)
         localStorage.removeItem("access_token")
         localStorage.removeItem("refresh_token")
-        window.location.href = "/login"
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false

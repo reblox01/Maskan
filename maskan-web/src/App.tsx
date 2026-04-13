@@ -1,5 +1,5 @@
-import { Routes, Route } from 'react-router-dom'
-import { AuthProvider } from '@/context/AuthContext'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { AuthProvider, useAuth } from '@/context/AuthContext'
 import Navbar from '@/components/Navbar'
 import DashboardLayout from '@/components/DashboardLayout'
 import Home from '@/pages/Home'
@@ -20,6 +20,37 @@ import BecomeAgent from '@/pages/dashboard/BecomeAgent'
 import AgentApplications from '@/pages/dashboard/AgentApplications'
 import ApplicationFields from '@/pages/dashboard/ApplicationFields'
 
+function ProtectedRoute({ children, requireAgent = false, requireAdmin = false }: { 
+  children: React.ReactNode
+  requireAgent?: boolean
+  requireAdmin?: boolean
+}) {
+  const { user, loading } = useAuth()
+  const location = useLocation()
+
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-teal-700 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
+
+  if (requireAdmin && user.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  if (requireAgent && user.role !== 'agent' && user.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  return <>{children}</>
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -36,18 +67,46 @@ export default function App() {
             <Route path="/estimate" element={<Estimate />} />
 
             {/* Dashboard routes */}
-            <Route path="/dashboard" element={<DashboardLayout />}>
+            <Route path="/dashboard" element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }>
               <Route index element={<DashboardHome />} />
-              <Route path="properties" element={<DashboardProperties />} />
-              <Route path="add-property" element={<AddProperty />} />
-              <Route path="user-management" element={<UserManagement />} />
-              <Route path="stats" element={<DashboardStats />} />
+              <Route path="properties" element={
+                <ProtectedRoute requireAgent>
+                  <DashboardProperties />
+                </ProtectedRoute>
+              } />
+              <Route path="add-property" element={
+                <ProtectedRoute requireAgent>
+                  <AddProperty />
+                </ProtectedRoute>
+              } />
+              <Route path="user-management" element={
+                <ProtectedRoute requireAdmin>
+                  <UserManagement />
+                </ProtectedRoute>
+              } />
+              <Route path="stats" element={
+                <ProtectedRoute requireAgent>
+                  <DashboardStats />
+                </ProtectedRoute>
+              } />
               <Route path="saved" element={<SavedProperties />} />
               <Route path="profile" element={<Profile />} />
               <Route path="settings" element={<Settings />} />
               <Route path="become-agent" element={<BecomeAgent />} />
-              <Route path="agent-applications" element={<AgentApplications />} />
-              <Route path="application-fields" element={<ApplicationFields />} />
+              <Route path="agent-applications" element={
+                <ProtectedRoute requireAdmin>
+                  <AgentApplications />
+                </ProtectedRoute>
+              } />
+              <Route path="application-fields" element={
+                <ProtectedRoute requireAdmin>
+                  <ApplicationFields />
+                </ProtectedRoute>
+              } />
             </Route>
           </Routes>
         </main>

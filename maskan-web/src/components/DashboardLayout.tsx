@@ -111,7 +111,7 @@ export default function DashboardLayout() {
 
   const sidebar = (
     <div className="flex flex-col h-full">
-      <div className="p-4">
+      <div className="pt-2 px-4 pb-4 shrink-0">
         <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
           <div className="w-10 h-10 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
             {user.username.charAt(0).toUpperCase()}
@@ -125,28 +125,28 @@ export default function DashboardLayout() {
         </div>
       </div>
 
-      <Separator />
+      <Separator className="shrink-0" />
 
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto overflow-x-hidden">
         {!collapsed && <p className="px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Navigation</p>}
         {navItems.map((item) => <SidebarNavItem key={item.to} item={item} collapsed={collapsed} />)}
 
         {adminItems.length > 0 && (
           <>
-            <Separator className="my-3" />
+            <Separator className="my-3 shrink-0" />
             {!collapsed && <p className="px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Administration</p>}
             {adminItems.map((item) => <SidebarNavItem key={item.to} item={item} collapsed={collapsed} />)}
           </>
         )}
 
-        <Separator className="my-3" />
+        <Separator className="my-3 shrink-0" />
         {!collapsed && <p className="px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Compte</p>}
         {accountItems.map((item) => <SidebarNavItem key={item.to} item={item} collapsed={collapsed} />)}
       </nav>
 
-      <Separator />
+      <Separator className="shrink-0" />
 
-      <div className="p-3 space-y-1">
+      <div className="p-3 space-y-1 shrink-0">
         <SidebarNavItem item={{ to: '/', icon: Home, label: 'Retour au site' }} collapsed={collapsed} />
         <button
           onClick={handleLogout}
@@ -163,18 +163,18 @@ export default function DashboardLayout() {
   )
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-slate-50">
-      <div className="flex">
+    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 flex">
         {/* Desktop sidebar */}
         <aside className={cn(
-          "hidden lg:flex flex-col bg-white border-r border-slate-200 h-[calc(100vh-4rem)] sticky top-16 overflow-hidden transition-all duration-300",
-          collapsed ? "w-16" : "w-64"
+          "hidden lg:flex flex-col bg-white border-r border-slate-200 fixed left-0 top-16 bottom-0 overflow-hidden transition-all duration-300",
+          collapsed ? "w-16" : "w-64",
+          "z-40"
         )}>
           {sidebar}
           {/* Collapse toggle */}
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="absolute top-4 -right-3 w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center cursor-pointer hover:bg-slate-50 transition-colors z-10"
+            className="absolute top-4 -right-3 w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center cursor-pointer hover:bg-slate-50 transition-colors z-50"
           >
             {collapsed ? <PanelLeft className="w-3.5 h-3.5 text-slate-500" /> : <PanelLeftClose className="w-3.5 h-3.5 text-slate-500" />}
           </button>
@@ -196,14 +196,16 @@ export default function DashboardLayout() {
                   <span className="text-lg font-bold text-teal-900">Menu</span>
                   <button onClick={() => setSidebarOpen(false)} className="p-1 rounded-lg hover:bg-slate-100 cursor-pointer"><X className="w-5 h-5" /></button>
                 </div>
-                {sidebar}
+                <div className="h-[calc(100vh-4rem)] overflow-y-auto">
+                  {sidebar}
+                </div>
               </motion.aside>
             </>
           )}
         </AnimatePresence>
 
         {/* Main content */}
-        <main className="flex-1 min-w-0">
+        <main className={cn("flex-1 min-w-0", collapsed ? "lg:ml-16" : "lg:ml-64")}>
           <div className="lg:hidden sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3">
             <button onClick={() => setSidebarOpen(true)} className="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer">
               <Menu className="w-5 h-5" /> Menu
@@ -212,6 +214,5 @@ export default function DashboardLayout() {
           <div className="p-4 sm:p-6 lg:p-8"><Outlet /></div>
         </main>
       </div>
-    </div>
   )
 }

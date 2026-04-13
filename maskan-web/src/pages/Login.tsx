@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,12 +8,30 @@ import { useAuth } from '@/context/AuthContext'
 
 export default function Login() {
   const navigate = useNavigate()
-  const { login } = useAuth()
+  const location = useLocation()
+  const { user, loading, login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard'
+
+  // Already logged in - redirect
+  useEffect(() => {
+    if (!loading && user) {
+      navigate(from, { replace: true })
+    }
+  }, [user, loading, navigate, from])
+
+  if (loading) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-teal-700 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -24,10 +42,10 @@ export default function Login() {
       return
     }
 
-    setLoading(true)
+    setSubmitting(true)
     try {
       await login(email, password)
-      navigate('/')
+      navigate(from, { replace: true })
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {
         const axiosErr = err as { response?: { data?: { error?: string } } }
@@ -36,7 +54,7 @@ export default function Login() {
         setError('Une erreur est survenue.')
       }
     } finally {
-      setLoading(false)
+      setSubmitting(false)
     }
   }
 
@@ -112,9 +130,9 @@ export default function Login() {
             <Button
               type="submit"
               className="w-full bg-teal-700 hover:bg-teal-800 cursor-pointer"
-              disabled={loading}
+              disabled={submitting}
             >
-              {loading ? 'Connexion...' : 'Se connecter'}
+              {submitting ? 'Connexion...' : 'Se connecter'}
             </Button>
           </form>
 
