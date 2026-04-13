@@ -1,6 +1,107 @@
+import re
 import django_filters
 from django.db.models import F
+from django.utils.html import strip_tags
 from .models import Property
+
+ALLOWED_FILTER_PARAMS = {
+    "title", "city", "region", "property_type", "status",
+    "price_min", "price_max", "area_min", "area_max",
+    "bedrooms", "bedrooms_min", "bedrooms_max",
+    "bathrooms", "bathrooms_min", "is_featured",
+    "lat", "lng", "radius_km", "search", "ordering", "page",
+}
+
+MAX_SEARCH_LENGTH = 100
+MAX_TEXT_FIELD_LENGTH = 200
+MAX_PRICE = 999999999999
+MAX_AREA = 99999
+MAX_BEDROOMS = 100
+MAX_BATHROOMS = 100
+
+
+def sanitize_text_input(value: str, max_length: int = MAX_TEXT_FIELD_LENGTH) -> str:
+    if not value:
+        return ""
+    value = strip_tags(value)
+    value = re.sub(r"[\x00-\x1F\x7F-\x9F]", "", value)
+    value = value.strip()[:max_length]
+    return value
+
+
+def validate_and_sanitize_params(query_params) -> dict:
+    sanitized = {}
+    for key, value in query_params.items():
+        if key not in ALLOWED_FILTER_PARAMS:
+            continue
+        if value is None or value == "":
+            continue
+        if key in ("title", "city", "region", "search"):
+            sanitized[key] = sanitize_text_input(str(value), MAX_SEARCH_LENGTH)
+        elif key in ("property_type", "status"):
+            sanitized[key] = str(value).strip().lower()
+        elif key in ("ordering",):
+            sanitized[key] = str(value).strip()
+        else:
+            sanitized[key] = value
+    return sanitized
+
+
+def validate_numeric_ranges(filters_dict: dict) -> dict:
+    validated = {}
+    for key, value in filters_dict.items():
+        if key in ("price_min", "price_max"):
+            try:
+                val = float(value)
+                if val < 0 or val > MAX_PRICE:
+                    continue
+                validated[key] = val
+            except (ValueError, TypeError):
+                continue
+        elif key in ("area_min", "area_max"):
+            try:
+                val = float(value)
+                if val < 0 or val > MAX_AREA:
+                    continue
+                validated[key] = val
+            except (ValueError, TypeError):
+                continue
+        elif key in ("bedrooms", "bedrooms_min", "bedrooms_max", "bathrooms", "bathrooms_min"):
+            try:
+                val = int(value)
+                if key.startswith("bedrooms") and (val < 0 or val > MAX_BEDROOMS):
+                    continue
+                if key.startswith("bathrooms") and (val < 0 or val > MAX_BATHROOMS):
+                    continue
+                validated[key] = val
+            except (ValueError, TypeError):
+                continue
+        elif key in ("lat", "lng", "radius_km"):
+            try:
+                val = float(value)
+                if key == "lat" and (val < -90 or val > 90):
+                    continue
+                if key == "lng" and (val < -180 or val > 180):
+                    continue
+                if key == "radius_km" and (val <= 0 or val > 1000):
+                    continue
+                validated[key] = val
+            except (ValueError, TypeError):
+                continue
+        elif key == "is_featured":
+            validated[key] = str(value).lower() in ("true", "1", "yes")
+        else:
+            validated[key] = value
+    if "price_min" in validated and "price_max" in validated:
+        if validated["price_min"] > validated["price_max"]:
+            del validated["price_min"]
+    if "area_min" in validated and "area_max" in validated:
+        if validated["area_min"] > validated["area_max"]:
+            del validated["area_min"]
+    if "bedrooms_min" in validated and "bedrooms_max" in validated:
+        if validated["bedrooms_min"] > validated["bedrooms_max"]:
+            del validated["bedrooms_min"]
+    return validated
 
 
 class PropertyFilter(django_filters.FilterSet):

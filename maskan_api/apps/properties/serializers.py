@@ -1,11 +1,44 @@
 import base64
 import hashlib
 import io
+import re
 from PIL import Image
+from django.utils.html import strip_tags
 from rest_framework import serializers
 from .models import Property, PropertyImage
 
 ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "WEBP", "GIF"}
+
+MAX_TITLE_LENGTH = 200
+MAX_DESCRIPTION_LENGTH = 5000
+MAX_ADDRESS_LENGTH = 300
+MAX_CITY_LENGTH = 100
+MAX_REGION_LENGTH = 100
+MAX_PRICE = 999999999999
+MIN_PRICE = 1
+MAX_AREA = 99999
+MIN_AREA = 1
+MAX_BEDROOMS = 100
+MAX_BATHROOMS = 100
+MAX_IMAGES_PER_PROPERTY = 20
+
+
+def sanitize_input(value: str, max_length: int = None) -> str:
+    if not value:
+        return ""
+    value = strip_tags(value)
+    value = re.sub(r"[\x00-\x1F\x7F-\x9F]", "", value)
+    value = value.strip()
+    if max_length:
+        value = value[:max_length]
+    return value
+
+
+def validate_email(value: str) -> str:
+    email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    if not re.match(email_pattern, value):
+        raise serializers.ValidationError("Invalid email format.")
+    return value.lower()
 
 
 def _validate_base64_image(value: str) -> bytes:
@@ -126,23 +159,93 @@ class PropertyCreateUpdateSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
     def validate_title(self, value):
-        value = value.strip()
+        value = sanitize_input(value, MAX_TITLE_LENGTH)
         if len(value) < 5:
             raise serializers.ValidationError("Title must be at least 5 characters.")
+        if len(value) > MAX_TITLE_LENGTH:
+            raise serializers.ValidationError(f"Title must be at most {MAX_TITLE_LENGTH} characters.")
+        return value
+
+    def validate_description(self, value):
+        return sanitize_input(value, MAX_DESCRIPTION_LENGTH)
+
+    def validate_address(self, value):
+        return sanitize_input(value, MAX_ADDRESS_LENGTH)
+
+    def validate_city(self, value):
+        value = sanitize_input(value, MAX_CITY_LENGTH)
+        if not value:
+            raise serializers.ValidationError("City is required.")
+        return value.title()
+
+    def validate_region(self, value):
+        value = sanitize_input(value, MAX_REGION_LENGTH)
+        if not value:
+            raise serializers.ValidationError("Region is required.")
+        return value.title()
+
+    def validate_property_type(self, value):
+        valid_types = [choice[0] for choice in Property.PropertyType.choices]
+        if value not in valid_types:
+            raise serializers.ValidationError("Invalid property type.")
+        return value
+
+    def validate_status(self, value):
+        valid_statuses = [choice[0] for choice in Property.Status.choices]
+        if value not in valid_statuses:
+            raise serializers.ValidationError("Invalid status.")
         return value
 
     def validate_price(self, value):
-        if value <= 0:
+        if value < MIN_PRICE:
             raise serializers.ValidationError("Price must be positive.")
-        if value > 999999999999:
+        if value > MAX_PRICE:
             raise serializers.ValidationError("Price is too high.")
         return value
 
-    def validate_city(self, value):
-        return value.strip().title()
+    def validate_area_sqm(self, value):
+        if value < MIN_AREA:
+            raise serializers.ValidationError("Area must be at least 1 square meter.")
+        if value > MAX_AREA:
+            raise serializers.ValidationError(f"Area cannot exceed {MAX_AREA} square meters.")
+        return value
 
-    def validate_region(self, value):
-        return value.strip().title()
+    def validate_bedrooms(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Bedrooms cannot be negative.")
+        if value > MAX_BEDROOMS:
+            raise serializers.ValidationError(f"Bedrooms cannot exceed {MAX_BEDROOMS}.")
+        return value
+
+    def validate_bathrooms(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Bathrooms cannot be negative.")
+        if value > MAX_BATHROOMS:
+            raise serializers.ValidationError(f"Bathrooms cannot exceed {MAX_BATHROOMS}.")
+        return value
+
+    def validate_latitude(self, value):
+        if value is not None and (value < -90 or value > 90):
+            raise serializers.ValidationError("Latitude must be between -90 and 90.")
+        return value
+
+    def validate_longitude(self, value):
+        if value is not None and (value < -180 or value > 180):
+            raise serializers.ValidationError("Longitude must be between -180 and 180.")
+        return value
+
+    def validate_currency(self, value):
+        valid_currencies = ["MAD", "USD", "EUR"]
+        if value not in valid_currencies:
+            raise serializers.ValidationError(f"Currency must be one of: {', '.join(valid_currencies)}")
+        return value
+
+    def validate_images(self, value):
+        if value is None:
+            return []
+        if len(value) > MAX_IMAGES_PER_PROPERTY:
+            raise serializers.ValidationError(f"Maximum {MAX_IMAGES_PER_PROPERTY} images allowed.")
+        return value
 
     def create(self, validated_data):
         images_data = validated_data.pop("images", [])
