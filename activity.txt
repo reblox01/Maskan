@@ -1,0 +1,87 @@
+@startuml
+skinparam activityBackgroundColor #F0F0F0
+skinparam activityBorderColor #333333
+skinparam activityDiamondBackgroundColor #FFDDAA
+skinparam activityDiamondBorderColor #333333
+skinparam arrowColor #333333
+
+title Diagramme d'Activite - Immobiliere
+
+|Authentification|
+start
+:Client s'inscrit;
+:Client se connecte;
+:Systeme verifie les identifiants;
+:Client accede au dashboard;
+stop
+
+|Gestion des Formulaires|
+start
+:Admin cree un formulaire;
+:Admin definit le type;
+repeat
+:Admin ajoute un champ;
+:Admin definit le type de champ;
+:Admin definit les choix;
+:Admin definit si requis;
+repeat while (Ajouter autre champ?)
+:Admin enregistre le formulaire;
+stop
+
+|Candidature|
+start
+:Client choisit formulaire;
+repeat
+:Client remplit un champ;
+repeat while (Autre champ?)
+:Client soumet la candidature;
+:Systeme cree candidature avec statut "pending";
+:Admin recoit notification;
+stop
+
+|Evaluation|
+start
+:Admin visionne la candidature;
+if "Candidature valide?" then
+  :Admin approuve;
+  :Client devient agent;
+  :Systeme met a jour le role;
+else
+  :Admin rejette;
+  :Admin ajoute notes;
+  :Client recoit notification;
+endif
+stop
+
+|Publication Propriete|
+start
+:Agent cree propriete;
+:Agent definit titre et description;
+:Agent definit type, prix et devise;
+:Agent definit surface et chambres;
+:Agent definit adresse et ville;
+repeat
+:Agent telecharge une image;
+:Agent definit ordre;
+repeat while (Autre image?)
+:Agent publie propriete;
+stop
+
+|Consultation Biens|
+start
+:Client parcourt les proprietes;
+repeat
+:Client filtre par ville;
+:Client filtre par prix;
+:Client filtre par type;
+repeat while (Filtrer davantage?)
+if "Propriete trouvee?" then
+  :Client visualise les details;
+  :Client visualise les images;
+else
+  :Client modifie les filtres;
+endif
+:Client contacte l'agent;
+stop
+
+@enduml

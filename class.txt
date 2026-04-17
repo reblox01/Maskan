@@ -1,0 +1,116 @@
+@startuml
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam nodesep 50
+skinparam ranksep 50
+hide circle
+hide methods
+
+class "clients" as clients {
+    +id
+    +email
+    +nom_utilisateur
+    +mot_de_passe
+    +telephone
+    +role <<client|agent|admin>>
+    +est_verifie
+    +est_staff
+    +est_actif
+    +prenom
+    +nom
+    +avatar
+    +bio
+    +adresse
+    +ville
+    +region
+    +mode_developpeur
+    +derniere_connexion
+    +date_inscription
+    +cree_le
+    +mis_a_jour
+}
+
+class "formulaires" as formulaires {
+    +id
+    +nom
+    +description
+    +type_formulaire <<candidature_agent|contact|autre>>
+    +est_actif
+    +cree_le
+    +mis_a_jour
+}
+
+class "champs_formulaires" as champs_formulaires {
+    +id
+    +formulaire_id <<FK: formulaires>>
+    +intitule
+    +type_champ <<text|number|textarea|select|checkbox|file>>
+    +placeholder
+    +texte_aide
+    +choix <<JSON: liste des options>>
+    +est_requis
+    +ordre
+    +est_actif
+    +cree_le
+}
+
+class "candidatures" as candidatures {
+    +id
+    +client_id <<FK: clients>>
+    +formulaire_id <<FK: formulaires>>
+    +statut <<pending|approved|rejected>>
+    +notes_admin
+    +cree_le
+    +revu_le
+    +revu_par_id <<FK: clients>>
+}
+
+class "reponses_candidature" as reponses_candidature {
+    +id
+    +candidature_id <<FK: candidatures>>
+    +champ_formulaire_id <<FK: champs_formulaires>>
+    +valeur
+}
+
+class "proprietes" as proprietes {
+    +id
+    +titre
+    +description
+    +type_propriete <<apartment|villa|studio|house|land|commercial|office>>
+    +statut <<available|sold|rented|pending>>
+    +prix
+    +devise
+    +surface_m2
+    +nb_chambres
+    +nb_salles_bain
+    +adresse
+    +ville
+    +region
+    +latitude
+    +longitude
+    +agent_id <<FK: clients>>
+    +est_publie
+    +est_en_vedette
+    +cree_le
+    +mis_a_jour
+}
+
+class "images_propriete" as images_propriete {
+    +id
+    +propriete_id <<FK: proprietes>>
+    +donnees_image
+    +hash_image
+    +ordre
+    +cree_le
+}
+
+clients "1" *-- "0..1" candidatures : postule
+clients "1" --> "0..*" candidatures : evalue
+clients "1" o-- "0..*" proprietes : publie
+formulaires "1" *-- "0..*" champs_formulaires : contient
+formulaires "1" o-- "0..*" candidatures : utilise
+candidatures "1" *-- "0..*" reponses_candidature : contient
+champs_formulaires "1" o-- "0..*" reponses_candidature : definit
+proprietes "1" *-- "0..*" images_propriete : contient
+
+@enduml
