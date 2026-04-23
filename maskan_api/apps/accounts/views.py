@@ -1,5 +1,6 @@
 import django.utils.timezone as tz
 from django.contrib.auth import authenticate, get_user_model
+from django.db.models import Count, Q
 from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
 from rest_framework import status, generics, permissions, viewsets
@@ -312,3 +313,89 @@ class VendeurApplicationReviewView(APIView):
             app.user.save(update_fields=["role", "current_mode"])
 
         return Response(VendeurApplicationDetailSerializer(app).data)
+
+
+class DashboardStatsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        now = tz.now()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        from datetime import timedelta
+        last_month_end = month_start - timedelta(days=1)
+        last_month_start = last_month_end.replace(day=1)
+
+        if user.role == "admin":
+            from apps.properties.models import Property
+            from apps.accounts.models import VendeurApplication
+
+            total_users = User.objects.count()
+            total_properties = Property.objects.count()
+            pending_verification = Property.objects.filter(verification_status="pending").count()
+            approved_properties = Property.objects.filter(verification_status="approved").count()
+            pending_applications = VendeurApplication.objects.filter(status="pending").count()
+
+            users_this_month = User.objects.filter(date_joined__gte=month_start).count()
+            users_last_month = User.objects.filter(date_joined__gte=last_month_start, date_joined__lt=month_start).count()
+            users_growth = ((users_this_month - users_last_month) / users_last_month * 100) if users_last_month > 0 else 0
+
+            properties_this_month = Property.objects.filter(created_at__gte=month_start).count()
+            properties_last_month = Property.objects.filter(created_at__gte=last_month_start, created_at__lt=month_start).count()
+            properties_growth = ((properties_this_month - properties_last_month) / properties_last_month * 100) if properties_last_month > 0 else 0
+
+            return Response({
+                "users_count": total_users,
+                "users_this_month": users_this_month,
+                "users_growth": round(users_growth, 1),
+                "properties_count": total_properties,
+                "properties_this_month": properties_this_month,
+                "properties_growth": round(properties_growth, 1),
+                "pending_verification": pending_verification,
+                "published_count": approved_properties,
+                "pending_applications": pending_applications,
+            })
+
+        current_mode = user.current_mode or user.role
+
+        if current_mode == "vendeur":
+            from apps.properties.models import Property
+
+            properties = Property.objects.filter(agent=user)
+            total = properties.count()
+            published = properties.filter(verification_status="approved").count()
+            pending = properties.filter(verification_status="pending").count()
+            rejected = properties.filter(verification_status="rejected").count()
+
+            properties_this_month = properties.filter(created_at__gte=month_start).count()
+            published_this_month = properties.filter(verification_status="approved", created_at__gte=month_start).count()
+
+            recent_properties = properties.order_by('-created_at')[:5]
+            recent_list = []
+            for p in recent_properties:
+                recent_list.append({
+                    "id": str(p.id),
+                    "title": p.title,
+                    "status": p.verification_status,
+                    "created_at": p.created_at.isoformat() if p.created_at else None,
+                })
+
+            return Response({
+                "properties_count": total,
+                "properties_this_month": properties_this_month,
+                "published_count": published,
+                "published_this_month": published_this_month,
+                "pending_count": pending,
+                "rejected_count": rejected,
+                "recent_properties": recent_list,
+            })
+
+        from apps.properties.models import SavedProperty
+
+        saved_count = SavedProperty.objects.filter(user=user).count()
+        saved_this_month = SavedProperty.objects.filter(user=user, created_at__gte=month_start).count()
+
+        return Response({
+            "saved_count": saved_count,
+            "saved_this_month": saved_this_month,
+        })

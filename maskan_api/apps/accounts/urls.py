@@ -36,6 +36,9 @@ urlpatterns = [
     # Vendeur application (client)
     path("vendeur-application/", views.VendeurApplicationView.as_view(), name="vendeur-application"),
 
+    # Dashboard stats
+    path("dashboard-stats/", views.DashboardStatsView.as_view(), name="dashboard-stats"),
+
     # Vendeur applications (admin)
     path("vendeur-applications/", views.VendeurApplicationListView.as_view(), name="vendeur-application-list"),
     path("vendeur-applications/<uuid:pk>/", views.VendeurApplicationReviewView.as_view(), name="vendeur-application-detail"),

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Menu, X, Home, User, LogOut, Settings, LayoutDashboard, Building2,
   ChevronDown, Search, TrendingUp, Heart, Building, ArrowLeftRight,
-  UserPlus, BadgeCheck,
+  UserPlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
