@@ -49,8 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(res.data)
       setLoading(false)
       return
-    } catch (err) {
-      if (refresh && err.response?.status === 401) {
+    } catch (err: unknown) {
+      if (refresh && (err as { response?: { status?: number } }).response?.status === 401) {
         try {
           const res = await axios.post('/api/auth/token/refresh/', { refresh })
           const newAccess = res.data.access

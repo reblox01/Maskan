@@ -13,6 +13,10 @@ import { useDeveloperMode } from '@/hooks/useDeveloperMode'
 import { mockDashboardStats, mockRecentActivity } from '@/lib/mockData'
 import { formatPrice, cn } from '@/lib/utils'
 
+type TrendStat = { title: string; value: number | string; change: string; trend: 'up' | 'down' }
+type NeutralStat = { title: string; value: number; trend: 'neutral' }
+type DashboardStat = TrendStat | NeutralStat
+
 function StatCardSkeleton() {
   return (
     <Card className="border-0 shadow-card"><CardContent className="p-5">
@@ -25,7 +29,7 @@ function StatCardSkeleton() {
 export default function DashboardHome() {
   const { user, loading: authLoading } = useAuth()
   const { enabled: devMode } = useDeveloperMode()
-  const role = user?.role || 'client'
+  const role = user?.role || 'acquereur'
 
   const icons: Record<string, React.ReactNode> = {
     'Total biens': <Building2 className="w-5 h-5" />,
@@ -56,8 +60,8 @@ export default function DashboardHome() {
   }
 
   const currentStats = devMode
-    ? mockDashboardStats[role] || mockDashboardStats.client
-    : mockDashboardStats[role] || mockDashboardStats.client // In production, fetch from API
+    ? mockDashboardStats[role] || mockDashboardStats.acquereur
+    : mockDashboardStats[role] || mockDashboardStats.acquereur
 
   const activity = devMode ? mockRecentActivity : mockRecentActivity.slice(0, 3)
 
@@ -81,7 +85,7 @@ export default function DashboardHome() {
           <h1 className="text-2xl font-bold text-slate-900">Bonjour, {user?.username} 👋</h1>
           <p className="text-sm text-slate-500 mt-1">Voici un aperçu de votre activité récente</p>
         </div>
-        {(role === 'agent' || role === 'admin') && (
+        {(role === 'vendeur' || role === 'admin') && (
           <Link to="/dashboard/add-property">
             <Button className="bg-teal-700 hover:bg-teal-800 cursor-pointer"><Plus className="w-4 h-4 mr-2" />Ajouter un bien</Button>
           </Link>
@@ -89,7 +93,7 @@ export default function DashboardHome() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {currentStats.map((stat, i) => (
+        {currentStats.map((stat: DashboardStat, i: number) => (
           <motion.div key={stat.title} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, duration: 0.3 }}>
             <Card className="border-0 shadow-card hover:shadow-card-hover transition-shadow duration-300">
               <CardContent className="p-5">
@@ -97,10 +101,10 @@ export default function DashboardHome() {
                   <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", iconColors[stat.title] || 'bg-slate-100 text-slate-600')}>
                     {icons[stat.title] || <Building2 className="w-5 h-5" />}
                   </div>
-                  {stat.trend && stat.change && (
+                  {'change' in stat && (
                     <Badge variant={stat.trend === 'up' ? 'success' : stat.trend === 'down' ? 'destructive' : 'secondary'} className="text-[10px]">
                       {stat.trend === 'up' ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : stat.trend === 'down' ? <ArrowDownRight className="w-3 h-3 mr-0.5" /> : null}
-                      {stat.change}
+                      {'change' in stat && stat.change}
                     </Badge>
                   )}
                 </div>
@@ -150,9 +154,9 @@ export default function DashboardHome() {
         <Card className="border-0 shadow-card">
           <CardContent className="p-5">
             <h3 className="text-sm font-semibold text-slate-900 mb-4">
-              {role === 'client' ? 'Biens recommandés' : 'Performances'}
+              {role === 'acquereur' ? 'Biens recommandés' : 'Performances'}
             </h3>
-            {role === 'client' ? (
+            {role === 'acquereur' ? (
               <div className="space-y-3">
                 {[
                   { title: 'Appartement F3 à Californie', city: 'Casablanca', price: 1800000 },

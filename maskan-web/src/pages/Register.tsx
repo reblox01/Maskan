@@ -1,21 +1,20 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, Home } from 'lucide-react'
+import { Eye, EyeOff, Home, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useAuth } from '@/context/AuthContext'
+import api from '@/lib/api'
 
 export default function Register() {
   const navigate = useNavigate()
-  const { register } = useAuth()
   const [formData, setFormData] = useState({
     email: '',
     username: '',
     password: '',
     password_confirm: '',
     phone: '',
-    role: 'client',
+    role: 'acquereur',
   })
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
@@ -30,17 +29,35 @@ export default function Register() {
   const validate = (): boolean => {
     const errors: Record<string, string> = {}
 
-    if (!formData.email) errors.email = 'Email requis.'
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = 'Email invalide.'
+    if (!formData.email) {
+      errors.email = 'Email requis.'
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'Format d\'email invalide.'
+    }
 
-    if (!formData.username) errors.username = 'Nom d\'utilisateur requis.'
-    else if (formData.username.length < 3) errors.username = 'Minimum 3 caractères.'
-    else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) errors.username = 'Lettres, chiffres et _ uniquement.'
+    if (!formData.username) {
+      errors.username = 'Nom d\'utilisateur requis.'
+    } else if (formData.username.length < 3) {
+      errors.username = 'Minimum 3 caractères.'
+    } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
+      errors.username = 'Lettres, chiffres et _ uniquement.'
+    }
 
-    if (!formData.password) errors.password = 'Mot de passe requis.'
-    else if (formData.password.length < 8) errors.password = 'Minimum 8 caractères.'
+    if (!formData.password) {
+      errors.password = 'Mot de passe requis.'
+    } else if (formData.password.length < 8) {
+      errors.password = 'Minimum 8 caractères.'
+    } else if (!/(?=.*[A-Z])(?=.*[a-z])(?=.*\d)/.test(formData.password)) {
+      errors.password = 'Le mot de passe doit contenir une majuscule, une minuscule et un chiffre.'
+    }
 
-    if (formData.password !== formData.password_confirm) errors.password_confirm = 'Les mots de passe ne correspondent pas.'
+    if (formData.password !== formData.password_confirm) {
+      errors.password_confirm = 'Les mots de passe ne correspondent pas.'
+    }
+
+    if (formData.phone && !/^\+?[\d\s\-()]{6,20}$/.test(formData.phone)) {
+      errors.phone = 'Numéro de téléphone invalide.'
+    }
 
     setFieldErrors(errors)
     return Object.keys(errors).length === 0
@@ -54,11 +71,23 @@ export default function Register() {
 
     setLoading(true)
     try {
-      await register(formData)
-      navigate('/')
+      const response = await api.post('/auth/register/', {
+        email: formData.email,
+        username: formData.username,
+        password: formData.password,
+        password_confirm: formData.password_confirm,
+        phone: formData.phone,
+        role: formData.role,
+      })
+
+      if (response.data.needs_application) {
+        navigate('/dashboard/become-vendeur', { state: { message: response.data.message } })
+      } else {
+        navigate('/')
+      }
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: Record<string, string[]> } }
+        const axiosErr = err as { response?: { data?: Record<string, string | string[]> } }
         const data = axiosErr.response?.data
         if (data) {
           const serverErrors: Record<string, string> = {}
@@ -70,7 +99,7 @@ export default function Register() {
             setFieldErrors(serverErrors)
             return
           }
-          if (data.error) setError(data.error)
+          if (data.error) setError(String(data.error))
         }
       }
       setError('Une erreur est survenue lors de l\'inscription.')
@@ -101,7 +130,8 @@ export default function Register() {
           </p>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center gap-2" role="alert">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
               {error}
             </div>
           )}
@@ -109,7 +139,7 @@ export default function Register() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
-                Email
+                Email <span className="text-red-500">*</span>
               </label>
               <Input
                 id="email"
@@ -128,7 +158,7 @@ export default function Register() {
 
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-slate-700 mb-1.5">
-                Nom d'utilisateur
+                Nom d'utilisateur <span className="text-red-500">*</span>
               </label>
               <Input
                 id="username"
@@ -154,12 +184,16 @@ export default function Register() {
                 onChange={(e) => updateField('phone', e.target.value)}
                 placeholder="+212 6XX XXX XXX"
                 autoComplete="tel"
+                aria-invalid={!!fieldErrors.phone}
               />
+              {fieldErrors.phone && (
+                <p className="text-xs text-red-600 mt-1">{fieldErrors.phone}</p>
+              )}
             </div>
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">
-                Mot de passe
+                Mot de passe <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <Input
@@ -183,11 +217,12 @@ export default function Register() {
               {fieldErrors.password && (
                 <p className="text-xs text-red-600 mt-1">{fieldErrors.password}</p>
               )}
+              <p className="text-xs text-slate-400 mt-1">Min. 8 caractères, majuscule, minuscule et chiffre</p>
             </div>
 
             <div>
               <label htmlFor="password_confirm" className="block text-sm font-medium text-slate-700 mb-1.5">
-                Confirmer le mot de passe
+                Confirmer le mot de passe <span className="text-red-500">*</span>
               </label>
               <Input
                 id="password_confirm"
@@ -203,30 +238,36 @@ export default function Register() {
               )}
             </div>
 
-            {/* Role Selection */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
                 Vous êtes
               </label>
               <div className="flex gap-3">
                 {[
-                  { value: 'client', label: 'Client' },
-                  { value: 'agent', label: 'Agent immobilier' },
+                  { value: 'acquereur', label: 'Acquereur', desc: 'Je cherche un bien' },
+                  { value: 'vendeur', label: 'Vendeur', desc: 'Je veux vendre/louer' },
                 ].map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
                     onClick={() => updateField('role', opt.value)}
-                    className={`flex-1 py-2.5 px-4 text-sm font-medium rounded-lg border-2 transition-all cursor-pointer ${
+                    className={`flex-1 py-3 px-4 text-sm font-medium rounded-xl border-2 transition-all cursor-pointer flex flex-col items-center gap-1 ${
                       formData.role === opt.value
                         ? 'border-teal-700 bg-teal-50 text-teal-700'
                         : 'border-slate-200 text-slate-600 hover:border-slate-300'
                     }`}
                   >
-                    {opt.label}
+                    <span className="font-semibold">{opt.label}</span>
+                    <span className="text-xs opacity-70">{opt.desc}</span>
                   </button>
                 ))}
               </div>
+              {formData.role === 'vendeur' && (
+                <p className="text-xs text-teal-600 mt-2 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Vous devrez remplir un formulaire de candidature
+                </p>
+              )}
             </div>
 
             <Button

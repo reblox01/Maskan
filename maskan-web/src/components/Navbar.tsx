@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Menu, X, Home, User, LogOut, Settings, LayoutDashboard, Building2,
-  ChevronDown, Search, TrendingUp, Heart, Building,
+  ChevronDown, Search, TrendingUp, Heart, Building, ArrowLeftRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -11,8 +11,10 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu'
+import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
+import api from '@/lib/api'
 
 const navItems = [
   {
@@ -40,10 +42,45 @@ const navItems = [
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { user, logout } = useAuth()
+  const { user, logout, updateUser } = useAuth()
   const location = useLocation()
 
   if (location.pathname.startsWith('/dashboard')) return null
+
+  const getRoleBadge = () => {
+    if (!user) return null
+    if (user.role === 'admin') {
+      return <Badge variant="destructive" className="text-[10px] px-1.5">Admin</Badge>
+    }
+    if (user.role === 'vendeur') {
+      const mode = user.current_mode === 'vendeur'
+      return (
+        <Badge
+          variant={mode ? 'default' : 'secondary'}
+          className={cn(
+            "text-[10px] px-1.5",
+            mode ? "bg-teal-700" : "bg-slate-400"
+          )}
+        >
+          {mode ? 'Vendeur' : 'Acquereur'}
+        </Badge>
+      )
+    }
+    return <Badge variant="secondary" className="text-[10px] px-1.5">Acquereur</Badge>
+  }
+
+  const handleSwitchRole = async () => {
+    if (!user || user.role !== 'vendeur') return
+    try {
+      const newMode = user.current_mode === 'vendeur' ? 'acquereur' : 'vendeur'
+      const response = await api.post('/auth/switch-role/', { mode: newMode })
+      if (updateUser) {
+        updateUser({ ...user, current_mode: response.data.current_mode })
+      }
+    } catch (err) {
+      console.error('Failed to switch role:', err)
+    }
+  }
 
   return (
     <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/80">
@@ -113,7 +150,9 @@ export default function Navbar() {
                     </Avatar>
                     <div className="hidden sm:block text-left">
                       <p className="text-sm font-medium text-slate-900 leading-tight">{user.username}</p>
-                      <p className="text-[10px] text-slate-400 capitalize">{user.role === 'admin' ? 'Admin' : user.role === 'agent' ? 'Agent' : 'Client'}</p>
+                      <div className="flex items-center gap-1">
+                        {getRoleBadge()}
+                      </div>
                     </div>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                   </button>
@@ -124,6 +163,19 @@ export default function Navbar() {
                     <p className="text-xs text-slate-400">{user.email}</p>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+
+                  {user.role === 'vendeur' && (
+                    <>
+                      <DropdownMenuItem onClick={handleSwitchRole} className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
+                        <ArrowLeftRight className="w-4 h-4 text-teal-600" />
+                        <span>
+                          Passer en mode {user.current_mode === 'vendeur' ? 'Acquereur' : 'Vendeur'}
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+
                   <DropdownMenuItem asChild>
                     <Link to="/dashboard" className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
                       <LayoutDashboard className="w-4 h-4 text-slate-500" />

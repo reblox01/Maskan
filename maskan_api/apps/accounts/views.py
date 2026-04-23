@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
 
-from .models import ApplicationField, AgentApplication
+from .models import ApplicationField, VendeurApplication
 from .serializers import (
     RegisterSerializer,
     LoginSerializer,
@@ -18,10 +18,11 @@ from .serializers import (
     AdminUserUpdateSerializer,
     ApplicationFieldSerializer,
     ApplicationFieldReorderSerializer,
-    AgentApplicationCreateSerializer,
-    AgentApplicationDetailSerializer,
-    AgentApplicationListSerializer,
-    AgentApplicationReviewSerializer,
+    VendeurApplicationCreateSerializer,
+    VendeurApplicationDetailSerializer,
+    VendeurApplicationListSerializer,
+    VendeurApplicationReviewSerializer,
+    SwitchRoleSerializer,
 )
 
 User = get_user_model()
@@ -43,22 +44,21 @@ class RegisterView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        user, selected_role = serializer.save()
 
-        selected_role = request.data.get("role", "client")
-        if selected_role == "agent":
-            AgentApplication.objects.create(user=user)
+        needs_application = selected_role == "vendeur"
 
         tokens = get_tokens_for_user(user)
-        return Response(
-            {
-                "user": UserSerializer(user).data,
-                "access": tokens["access"],
-                "refresh": tokens["refresh"],
-                "message": "Registration successful.",
-            },
-            status=status.HTTP_201_CREATED,
-        )
+        response_data = {
+            "user": UserSerializer(user).data,
+            "access": tokens["access"],
+            "refresh": tokens["refresh"],
+            "message": "Inscription réussie.",
+        }
+        if needs_application:
+            response_data["needs_application"] = True
+            response_data["message"] = "Compte créé. Veuillez remplir le formulaire de candidature pour devenir vendeur."
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 @method_decorator(ratelimit(key="ip", rate="10/m", method="POST"), name="post")
@@ -77,7 +77,13 @@ class LoginView(APIView):
 
         if user is None:
             return Response(
-                {"error": "Invalid email or password."},
+                {"error": "Email ou mot de passe invalide."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if not user.is_active:
+            return Response(
+                {"error": "Ce compte a été désactivé."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
@@ -87,7 +93,7 @@ class LoginView(APIView):
                 "user": UserSerializer(user).data,
                 "access": tokens["access"],
                 "refresh": tokens["refresh"],
-                "message": "Login successful.",
+                "message": "Connexion réussie.",
             },
             status=status.HTTP_200_OK,
         )
@@ -104,7 +110,7 @@ class LogoutView(APIView):
                 token.blacklist()
         except Exception:
             pass
-        return Response({"message": "Logged out successfully."}, status=status.HTTP_200_OK)
+        return Response({"message": "Déconnexion réussie."}, status=status.HTTP_200_OK)
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
@@ -126,6 +132,33 @@ class CookieTokenRefreshView(BaseTokenRefreshView):
         return super().post(request, *args, **kwargs)
 
 
+class SwitchRoleView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = SwitchRoleSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
+        new_mode = serializer.validated_data["mode"]
+        current = request.user.current_mode
+
+        if new_mode == current:
+            return Response(
+                {"message": f"Vous êtes déjà en mode {new_mode}.", "current_mode": current},
+                status=status.HTTP_200_OK,
+            )
+
+        request.user.switch_mode()
+        return Response(
+            {
+                "message": f"Vous êtes maintenant en mode {request.user.current_mode}.",
+                "current_mode": request.user.current_mode,
+                "is_vendeur_active": request.user.is_vendeur_active,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class DeveloperModeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -134,7 +167,7 @@ class DeveloperModeView(APIView):
 
     def patch(self, request):
         if request.user.role != "admin":
-            return Response({"error": "Admin only."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Réservé aux administrateurs."}, status=status.HTTP_403_FORBIDDEN)
         request.user.developer_mode = not request.user.developer_mode
         request.user.save(update_fields=["developer_mode"])
         return Response({"developer_mode": request.user.developer_mode})
@@ -196,84 +229,85 @@ class ApplicationFieldViewSet(viewsets.ModelViewSet):
 
     def reorder(self, request):
         if request.user.role != "admin":
-            return Response({"error": "Admin only."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Réservé aux administrateurs."}, status=status.HTTP_403_FORBIDDEN)
         serializer = ApplicationFieldReorderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         order = serializer.validated_data["order"]
         for i, field_id in enumerate(order):
             ApplicationField.objects.filter(id=field_id).update(order=i)
-        return Response({"message": "Order updated."})
+        return Response({"message": "Ordre mis à jour."})
 
 
-class AgentApplicationView(APIView):
+class VendeurApplicationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         try:
-            app = AgentApplication.objects.get(user=request.user)
-            serializer = AgentApplicationDetailSerializer(app)
+            app = VendeurApplication.objects.get(user=request.user)
+            serializer = VendeurApplicationDetailSerializer(app)
             return Response(serializer.data)
-        except AgentApplication.DoesNotExist:
+        except VendeurApplication.DoesNotExist:
             return Response({"status": "none"}, status=status.HTTP_200_OK)
 
     def post(self, request):
-        serializer = AgentApplicationCreateSerializer(data=request.data, context={"request": request})
+        serializer = VendeurApplicationCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         application = serializer.save()
         return Response(
-            AgentApplicationDetailSerializer(application).data,
+            VendeurApplicationDetailSerializer(application).data,
             status=status.HTTP_201_CREATED,
         )
 
 
-class AgentApplicationListView(generics.ListAPIView):
-    serializer_class = AgentApplicationListSerializer
+class VendeurApplicationListView(generics.ListAPIView):
+    serializer_class = VendeurApplicationListSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
 
     def get_queryset(self):
         if self.request.user.role != "admin":
-            return AgentApplication.objects.none()
-        qs = AgentApplication.objects.select_related("user")
+            return VendeurApplication.objects.none()
+        qs = VendeurApplication.objects.select_related("user")
         status_filter = self.request.query_params.get("status")
         if status_filter and status_filter != "all":
             qs = qs.filter(status=status_filter)
         return qs
 
 
-class AgentApplicationReviewView(APIView):
+class VendeurApplicationReviewView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk):
         if request.user.role != "admin":
-            return Response({"error": "Admin only."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Réservé aux administrateurs."}, status=status.HTTP_403_FORBIDDEN)
         try:
-            app = AgentApplication.objects.get(pk=pk)
-        except AgentApplication.DoesNotExist:
-            return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = AgentApplicationDetailSerializer(app)
+            app = VendeurApplication.objects.get(pk=pk)
+        except VendeurApplication.DoesNotExist:
+            return Response({"error": "Non trouvé."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = VendeurApplicationDetailSerializer(app)
         return Response(serializer.data)
 
     def patch(self, request, pk):
         if request.user.role != "admin":
-            return Response({"error": "Admin only."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Réservé aux administrateurs."}, status=status.HTTP_403_FORBIDDEN)
         try:
-            app = AgentApplication.objects.get(pk=pk)
-        except AgentApplication.DoesNotExist:
-            return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            app = VendeurApplication.objects.get(pk=pk)
+        except VendeurApplication.DoesNotExist:
+            return Response({"error": "Non trouvé."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = AgentApplicationReviewSerializer(data=request.data)
+        serializer = VendeurApplicationReviewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         new_status = serializer.validated_data["status"]
         app.status = new_status
         app.admin_notes = serializer.validated_data.get("admin_notes", "")
         app.reviewed_at = tz.now()
-        app.reviewed_by = request.user
+        app.review_by = request.user
         app.save()
 
         if new_status == "approved":
-            app.user.role = "agent"
-            app.user.save(update_fields=["role"])
+            app.user.role = "vendeur"
+            app.user.current_mode = "vendeur"
+            app.user.save(update_fields=["role", "current_mode"])
 
-        return Response(AgentApplicationDetailSerializer(app).data)
+        return Response(VendeurApplicationDetailSerializer(app).data)

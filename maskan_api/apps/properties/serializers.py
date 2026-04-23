@@ -37,59 +37,50 @@ def sanitize_input(value: str, max_length: int = None) -> str:
 def validate_email(value: str) -> str:
     email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     if not re.match(email_pattern, value):
-        raise serializers.ValidationError("Invalid email format.")
+        raise serializers.ValidationError("Format d'email invalide.")
     return value.lower()
 
 
 def _validate_base64_image(value: str) -> bytes:
     """Validate base64 string is a real image. Returns decoded bytes."""
-    # Strip data URI prefix if present
     if "," in value and value.startswith("data:"):
         value = value.split(",", 1)[1]
 
     try:
         decoded = base64.b64decode(value)
     except Exception:
-        raise serializers.ValidationError("Invalid base64 encoding.")
+        raise serializers.ValidationError("Encodage base64 invalide.")
 
-    # Max 10MB
     if len(decoded) > 10 * 1024 * 1024:
-        raise serializers.ValidationError("Image must be under 10MB.")
+        raise serializers.ValidationError("L'image doit faire moins de 10 Mo.")
 
-    # Verify it's a valid image using Pillow
     try:
         img = Image.open(io.BytesIO(decoded))
         img.verify()
     except Exception:
-        raise serializers.ValidationError("Invalid image data.")
+        raise serializers.ValidationError("Données d'image invalides.")
 
-    # Re-open after verify (verify closes the file)
     img = Image.open(io.BytesIO(decoded))
     if img.format not in ALLOWED_IMAGE_FORMATS:
         raise serializers.ValidationError(
-            f"Unsupported format '{img.format}'. Use JPEG, PNG, WebP, or GIF."
+            f"Format non supporté '{img.format}'. Utilisez JPEG, PNG, WebP ou GIF."
         )
 
     return decoded
 
 
 class PropertyImageSerializer(serializers.ModelSerializer):
-    """Serializer for property images with base64 validation."""
-
     class Meta:
         model = PropertyImage
         fields = ["id", "image_data", "image_hash", "order", "created_at"]
         read_only_fields = ["id", "image_hash", "created_at"]
 
     def validate_image_data(self, value):
-        """Validate that the image_data is a valid base64 encoded image."""
         _validate_base64_image(value)
         return value
 
 
 class PropertyImageCreateSerializer(serializers.Serializer):
-    """Nested serializer for creating images with a property."""
-
     image_data = serializers.CharField()
     order = serializers.IntegerField(min_value=0, default=0)
 
@@ -103,6 +94,7 @@ class PropertyListSerializer(serializers.ModelSerializer):
 
     main_image_hash = serializers.SerializerMethodField()
     agent_name = serializers.CharField(source="agent.username", read_only=True)
+    verification_status = serializers.CharField(read_only=True)
 
     class Meta:
         model = Property
@@ -110,19 +102,18 @@ class PropertyListSerializer(serializers.ModelSerializer):
             "id", "title", "property_type", "status", "price", "currency",
             "area_sqm", "bedrooms", "bathrooms", "city", "region",
             "latitude", "longitude", "is_featured", "main_image_hash",
-            "agent_name", "created_at",
+            "agent_name", "verification_status", "created_at",
         ]
-
-    def get_main_image_hash(self, obj):
-        main = obj.images.order_by("order").first()
-        return main.image_hash if main else None
 
 
 class PropertyDetailSerializer(serializers.ModelSerializer):
-    """Full property detail with images."""
+    """Full property detail with images and verification info."""
 
     images = PropertyImageSerializer(many=True, read_only=True)
     agent = serializers.SerializerMethodField()
+    verification_status = serializers.CharField(read_only=True)
+    is_verified = serializers.BooleanField(read_only=True)
+    rejection_reason = serializers.CharField(read_only=True)
 
     class Meta:
         model = Property
@@ -131,16 +122,9 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
             "price", "currency", "area_sqm", "bedrooms", "bathrooms",
             "address", "city", "region", "latitude", "longitude",
             "is_published", "is_featured", "agent", "images",
+            "verification_status", "is_verified", "rejection_reason",
             "created_at", "updated_at",
         ]
-
-    def get_agent(self, obj):
-        return {
-            "id": str(obj.agent.id),
-            "username": obj.agent.username,
-            "email": obj.agent.email,
-            "phone": obj.agent.phone,
-        }
 
 
 class PropertyCreateUpdateSerializer(serializers.ModelSerializer):
@@ -161,9 +145,9 @@ class PropertyCreateUpdateSerializer(serializers.ModelSerializer):
     def validate_title(self, value):
         value = sanitize_input(value, MAX_TITLE_LENGTH)
         if len(value) < 5:
-            raise serializers.ValidationError("Title must be at least 5 characters.")
+            raise serializers.ValidationError("Le titre doit contenir au moins 5 caractères.")
         if len(value) > MAX_TITLE_LENGTH:
-            raise serializers.ValidationError(f"Title must be at most {MAX_TITLE_LENGTH} characters.")
+            raise serializers.ValidationError(f"Le titre ne peut pas dépasser {MAX_TITLE_LENGTH} caractères.")
         return value
 
     def validate_description(self, value):
@@ -175,80 +159,82 @@ class PropertyCreateUpdateSerializer(serializers.ModelSerializer):
     def validate_city(self, value):
         value = sanitize_input(value, MAX_CITY_LENGTH)
         if not value:
-            raise serializers.ValidationError("City is required.")
+            raise serializers.ValidationError("La ville est requise.")
         return value.title()
 
     def validate_region(self, value):
         value = sanitize_input(value, MAX_REGION_LENGTH)
         if not value:
-            raise serializers.ValidationError("Region is required.")
+            raise serializers.ValidationError("La région est requise.")
         return value.title()
 
     def validate_property_type(self, value):
         valid_types = [choice[0] for choice in Property.PropertyType.choices]
         if value not in valid_types:
-            raise serializers.ValidationError("Invalid property type.")
+            raise serializers.ValidationError("Type de bien invalide.")
         return value
 
     def validate_status(self, value):
         valid_statuses = [choice[0] for choice in Property.Status.choices]
         if value not in valid_statuses:
-            raise serializers.ValidationError("Invalid status.")
+            raise serializers.ValidationError("Statut invalide.")
         return value
 
     def validate_price(self, value):
         if value < MIN_PRICE:
-            raise serializers.ValidationError("Price must be positive.")
+            raise serializers.ValidationError("Le prix doit être positif.")
         if value > MAX_PRICE:
-            raise serializers.ValidationError("Price is too high.")
+            raise serializers.ValidationError("Le prix est trop élevé.")
         return value
 
     def validate_area_sqm(self, value):
         if value < MIN_AREA:
-            raise serializers.ValidationError("Area must be at least 1 square meter.")
+            raise serializers.ValidationError("La surface doit être d'au moins 1 m².")
         if value > MAX_AREA:
-            raise serializers.ValidationError(f"Area cannot exceed {MAX_AREA} square meters.")
+            raise serializers.ValidationError(f"La surface ne peut pas dépasser {MAX_AREA} m².")
         return value
 
     def validate_bedrooms(self, value):
         if value < 0:
-            raise serializers.ValidationError("Bedrooms cannot be negative.")
+            raise serializers.ValidationError("Le nombre de chambres ne peut pas être négatif.")
         if value > MAX_BEDROOMS:
-            raise serializers.ValidationError(f"Bedrooms cannot exceed {MAX_BEDROOMS}.")
+            raise serializers.ValidationError(f"Le nombre de chambres ne peut pas dépasser {MAX_BEDROOMS}.")
         return value
 
     def validate_bathrooms(self, value):
         if value < 0:
-            raise serializers.ValidationError("Bathrooms cannot be negative.")
+            raise serializers.ValidationError("Le nombre de salles de bain ne peut pas être négatif.")
         if value > MAX_BATHROOMS:
-            raise serializers.ValidationError(f"Bathrooms cannot exceed {MAX_BATHROOMS}.")
+            raise serializers.ValidationError(f"Le nombre de salles de bain ne peut pas dépasser {MAX_BATHROOMS}.")
         return value
 
     def validate_latitude(self, value):
         if value is not None and (value < -90 or value > 90):
-            raise serializers.ValidationError("Latitude must be between -90 and 90.")
+            raise serializers.ValidationError("La latitude doit être entre -90 et 90.")
         return value
 
     def validate_longitude(self, value):
         if value is not None and (value < -180 or value > 180):
-            raise serializers.ValidationError("Longitude must be between -180 and 180.")
+            raise serializers.ValidationError("La longitude doit être entre -180 et 180.")
         return value
 
     def validate_currency(self, value):
         valid_currencies = ["MAD", "USD", "EUR"]
         if value not in valid_currencies:
-            raise serializers.ValidationError(f"Currency must be one of: {', '.join(valid_currencies)}")
+            raise serializers.ValidationError(f"La devise doit être l'une de: {', '.join(valid_currencies)}")
         return value
 
     def validate_images(self, value):
         if value is None:
             return []
         if len(value) > MAX_IMAGES_PER_PROPERTY:
-            raise serializers.ValidationError(f"Maximum {MAX_IMAGES_PER_PROPERTY} images allowed.")
+            raise serializers.ValidationError(f"Maximum {MAX_IMAGES_PER_PROPERTY} images autorisées.")
         return value
 
     def create(self, validated_data):
         images_data = validated_data.pop("images", [])
+        validated_data["verification_status"] = Property.VerificationStatus.PENDING
+        validated_data["is_published"] = False
         property_obj = Property.objects.create(**validated_data)
 
         for img_data in images_data:
@@ -287,3 +273,64 @@ class PropertyCreateUpdateSerializer(serializers.ModelSerializer):
                 )
 
         return instance
+
+
+class PropertyVerificationSerializer(serializers.Serializer):
+    """Serializer for admin property verification."""
+
+    action = serializers.ChoiceField(choices=["approve", "reject"])
+    rejection_reason = serializers.CharField(required=False, allow_blank=True, max_length=1000)
+
+
+class PropertyAdminListSerializer(serializers.ModelSerializer):
+    """Serializer for admin property list with verification fields."""
+
+    agent_name = serializers.CharField(source="agent.username", read_only=True)
+    agent_email = serializers.CharField(source="agent.email", read_only=True)
+    reviewed_by_name = serializers.CharField(source="reviewed_by.username", read_only=True, allow_null=True)
+
+    class Meta:
+        model = Property
+        fields = [
+            "id", "title", "property_type", "status", "price", "currency",
+            "city", "region", "is_published", "is_verified",
+            "verification_status", "rejection_reason",
+            "agent_name", "agent_email", "reviewed_by_name", "reviewed_at",
+            "created_at",
+        ]
+
+
+class PropertyAdminDetailSerializer(serializers.ModelSerializer):
+    """Full property detail for admin with all verification fields."""
+
+    images = PropertyImageSerializer(many=True, read_only=True)
+    agent = serializers.SerializerMethodField()
+    reviewed_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Property
+        fields = [
+            "id", "title", "description", "property_type", "status",
+            "price", "currency", "area_sqm", "bedrooms", "bathrooms",
+            "address", "city", "region", "latitude", "longitude",
+            "is_published", "is_verified", "is_featured",
+            "verification_status", "rejection_reason",
+            "agent", "images", "reviewed_by", "reviewed_at",
+            "created_at", "updated_at",
+        ]
+
+    def get_agent(self, obj):
+        return {
+            "id": str(obj.agent.id),
+            "username": obj.agent.username,
+            "email": obj.agent.email,
+            "phone": obj.agent.phone,
+        }
+
+    def get_reviewed_by(self, obj):
+        if obj.reviewed_by:
+            return {
+                "id": str(obj.reviewed_by.id),
+                "username": obj.reviewed_by.username,
+            }
+        return None

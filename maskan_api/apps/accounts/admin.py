@@ -1,12 +1,12 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, ApplicationField, AgentApplication, ApplicationResponse
+from .models import User, ApplicationField, VendeurApplication, ApplicationResponse
 
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ("email", "username", "role", "is_verified", "is_staff", "developer_mode")
-    list_filter = ("role", "is_verified", "is_staff", "developer_mode")
+    list_display = ("email", "username", "role", "current_mode", "is_verified", "is_staff", "developer_mode")
+    list_filter = ("role", "current_mode", "is_verified", "is_staff", "developer_mode")
     search_fields = ("email", "username", "phone")
     ordering = ("-created_at",)
 
@@ -24,8 +24,8 @@ class ApplicationFieldAdmin(admin.ModelAdmin):
     ordering = ("order",)
 
 
-@admin.register(AgentApplication)
-class AgentApplicationAdmin(admin.ModelAdmin):
+@admin.register(VendeurApplication)
+class VendeurApplicationAdmin(admin.ModelAdmin):
     list_display = ("user", "status", "created_at", "reviewed_at", "reviewed_by")
     list_filter = ("status",)
     search_fields = ("user__email", "user__username")

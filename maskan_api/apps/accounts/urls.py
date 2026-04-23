@@ -9,6 +9,9 @@ urlpatterns = [
     path("profile/", views.ProfileView.as_view(), name="profile"),
     path("token/refresh/", views.CookieTokenRefreshView.as_view(), name="token-refresh"),
 
+    # Role switch
+    path("switch-role/", views.SwitchRoleView.as_view(), name="switch-role"),
+
     # Developer mode
     path("developer-mode/", views.DeveloperModeView.as_view(), name="developer-mode"),
 
@@ -30,10 +33,10 @@ urlpatterns = [
         "get": "retrieve", "put": "update", "patch": "partial_update", "delete": "destroy",
     }), name="application-field-detail"),
 
-    # Agent application (client)
-    path("agent-application/", views.AgentApplicationView.as_view(), name="agent-application"),
+    # Vendeur application (client)
+    path("vendeur-application/", views.VendeurApplicationView.as_view(), name="vendeur-application"),
 
-    # Agent applications (admin)
-    path("agent-applications/", views.AgentApplicationListView.as_view(), name="agent-application-list"),
-    path("agent-applications/<uuid:pk>/", views.AgentApplicationReviewView.as_view(), name="agent-application-detail"),
+    # Vendeur applications (admin)
+    path("vendeur-applications/", views.VendeurApplicationListView.as_view(), name="vendeur-application-list"),
+    path("vendeur-applications/<uuid:pk>/", views.VendeurApplicationReviewView.as_view(), name="vendeur-application-detail"),
 ]

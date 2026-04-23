@@ -3,14 +3,17 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Building2, Users, BarChart3, Heart,
-  User, Settings, LogOut, Menu, X, ChevronRight, ChevronLeft,
+  User, Settings, LogOut, Menu, X, ChevronRight,
   Home, PanelLeftClose, PanelLeft, UserPlus, ClipboardList, ToggleLeft,
+  ShieldCheck, ArrowLeftRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
+import api from '@/lib/api'
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -49,20 +52,22 @@ export default function DashboardLayout() {
   }
 
   const role = user.role
-  const hasAgentApp = false // Will be populated from API
+  const isVendeur = role === 'vendeur' || role === 'admin'
+  const isVendeurActive = user.current_mode === 'vendeur'
 
   const navItems = [
-    { to: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', roles: ['admin', 'agent', 'client'] },
-    { to: '/dashboard/properties', icon: Building2, label: 'Mes biens', roles: ['agent', 'admin'] },
-    { to: '/dashboard/add-property', icon: Building2, label: 'Ajouter un bien', roles: ['agent', 'admin'] },
-    { to: '/dashboard/saved', icon: Heart, label: 'Favoris', roles: ['client'] },
-    { to: '/dashboard/stats', icon: BarChart3, label: 'Statistiques', roles: ['agent', 'admin'] },
-    { to: '/dashboard/become-agent', icon: UserPlus, label: 'Devenir agent', roles: ['client'] },
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', roles: ['admin', 'vendeur', 'acquereur'] },
+    { to: '/dashboard/properties', icon: Building2, label: 'Mes biens', roles: ['admin', 'vendeur'] },
+    { to: '/dashboard/add-property', icon: Building2, label: 'Ajouter un bien', roles: ['admin', 'vendeur'] },
+    { to: '/dashboard/saved', icon: Heart, label: 'Favoris', roles: ['acquereur', 'admin'] },
+    { to: '/dashboard/stats', icon: BarChart3, label: 'Statistiques', roles: ['admin', 'vendeur'] },
+    { to: '/dashboard/become-vendeur', icon: UserPlus, label: 'Devenir vendeur', roles: ['acquereur'] },
   ].filter(item => item.roles.includes(role))
 
   const adminItems = [
     { to: '/dashboard/user-management', icon: Users, label: 'Utilisateurs', roles: ['admin'] },
-    { to: '/dashboard/agent-applications', icon: ClipboardList, label: 'Demandes d\'agent', roles: ['admin'] },
+    { to: '/dashboard/vendeur-applications', icon: ClipboardList, label: 'Candidatures', roles: ['admin'] },
+    { to: '/dashboard/property-verification', icon: ShieldCheck, label: 'Vérification biens', roles: ['admin'] },
     { to: '/dashboard/application-fields', icon: ToggleLeft, label: 'Config. champs', roles: ['admin'] },
   ].filter(item => item.roles.includes(role))
 
@@ -77,6 +82,26 @@ export default function DashboardLayout() {
   }
 
   const handleLogout = async () => { await logout(); navigate('/') }
+
+  const handleSwitchRole = async () => {
+    if (!isVendeur) return
+    try {
+      const newMode = user.current_mode === 'vendeur' ? 'acquereur' : 'vendeur'
+      await api.post('/auth/switch-role/', { mode: newMode })
+      window.location.reload()
+    } catch (err) {
+      console.error('Failed to switch role:', err)
+    }
+  }
+
+  const getRoleLabel = () => {
+    if (role === 'admin') return 'Administrateur'
+    if (role === 'vendeur') {
+      if (user.current_mode === 'vendeur') return 'Vendeur'
+      return 'Acquereur'
+    }
+    return 'Acquereur'
+  }
 
   const SidebarNavItem = ({ item, collapsed }: { item: { to: string; icon: React.ComponentType<{ className?: string }>; label: string }; collapsed: boolean }) => {
     const Icon = item.icon
@@ -119,7 +144,17 @@ export default function DashboardLayout() {
           {!collapsed && (
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-900 truncate">{user.username}</p>
-              <p className="text-xs text-slate-500 capitalize">{role === 'admin' ? 'Administrateur' : role === 'agent' ? 'Agent' : 'Client'}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs text-slate-500">{getRoleLabel()}</p>
+                {role === 'vendeur' && (
+                  <Badge
+                    variant={isVendeurActive ? 'default' : 'secondary'}
+                    className={cn("text-[9px] px-1 py-0", isVendeurActive && "bg-teal-700")}
+                  >
+                    {isVendeurActive ? 'Actif' : 'Inactif'}
+                  </Badge>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -142,6 +177,24 @@ export default function DashboardLayout() {
         <Separator className="my-3 shrink-0" />
         {!collapsed && <p className="px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Compte</p>}
         {accountItems.map((item) => <SidebarNavItem key={item.to} item={item} collapsed={collapsed} />)}
+
+        {isVendeur && (
+          <button
+            onClick={handleSwitchRole}
+            className={cn(
+              "flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer w-full",
+              collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5",
+              "text-teal-700 hover:bg-teal-50"
+            )}
+          >
+            <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />
+            {!collapsed && (
+              <span>
+                {isVendeurActive ? 'Passer en mode Acquereur' : 'Passer en mode Vendeur'}
+              </span>
+            )}
+          </button>
+        )}
       </nav>
 
       <Separator className="shrink-0" />

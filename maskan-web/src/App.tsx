@@ -16,13 +16,14 @@ import SavedProperties from '@/pages/dashboard/SavedProperties'
 import Profile from '@/pages/dashboard/Profile'
 import Settings from '@/pages/dashboard/Settings'
 import UserManagement from '@/pages/dashboard/UserManagement'
-import BecomeAgent from '@/pages/dashboard/BecomeAgent'
-import AgentApplications from '@/pages/dashboard/AgentApplications'
+import BecomeVendeur from '@/pages/dashboard/BecomeVendeur'
+import VendeurApplications from '@/pages/dashboard/VendeurApplications'
 import ApplicationFields from '@/pages/dashboard/ApplicationFields'
+import PropertyVerification from '@/pages/dashboard/PropertyVerification'
 
-function ProtectedRoute({ children, requireAgent = false, requireAdmin = false }: { 
+function ProtectedRoute({ children, requireVendeur = false, requireAdmin = false }: {
   children: React.ReactNode
-  requireAgent?: boolean
+  requireVendeur?: boolean
   requireAdmin?: boolean
 }) {
   const { user, loading } = useAuth()
@@ -44,7 +45,7 @@ function ProtectedRoute({ children, requireAgent = false, requireAdmin = false }
     return <Navigate to="/dashboard" replace />
   }
 
-  if (requireAgent && user.role !== 'agent' && user.role !== 'admin') {
+  if (requireVendeur && user.role !== 'vendeur' && user.role !== 'admin') {
     return <Navigate to="/dashboard" replace />
   }
 
@@ -74,12 +75,12 @@ export default function App() {
             }>
               <Route index element={<DashboardHome />} />
               <Route path="properties" element={
-                <ProtectedRoute requireAgent>
+                <ProtectedRoute requireVendeur>
                   <DashboardProperties />
                 </ProtectedRoute>
               } />
               <Route path="add-property" element={
-                <ProtectedRoute requireAgent>
+                <ProtectedRoute requireVendeur>
                   <AddProperty />
                 </ProtectedRoute>
               } />
@@ -89,17 +90,22 @@ export default function App() {
                 </ProtectedRoute>
               } />
               <Route path="stats" element={
-                <ProtectedRoute requireAgent>
+                <ProtectedRoute requireVendeur>
                   <DashboardStats />
                 </ProtectedRoute>
               } />
               <Route path="saved" element={<SavedProperties />} />
               <Route path="profile" element={<Profile />} />
               <Route path="settings" element={<Settings />} />
-              <Route path="become-agent" element={<BecomeAgent />} />
-              <Route path="agent-applications" element={
+              <Route path="become-vendeur" element={<BecomeVendeur />} />
+              <Route path="vendeur-applications" element={
                 <ProtectedRoute requireAdmin>
-                  <AgentApplications />
+                  <VendeurApplications />
+                </ProtectedRoute>
+              } />
+              <Route path="property-verification" element={
+                <ProtectedRoute requireAdmin>
+                  <PropertyVerification />
                 </ProtectedRoute>
               } />
               <Route path="application-fields" element={

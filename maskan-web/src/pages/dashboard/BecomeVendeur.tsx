@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { UserPlus, Check, AlertCircle, Loader2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -12,23 +12,35 @@ import { Separator } from '@/components/ui/separator'
 import { useAuth } from '@/context/AuthContext'
 import { toast } from '@/hooks/useToast'
 import api from '@/lib/api'
-import type { ApplicationField, AgentApplication } from '@/types'
+import type { ApplicationField, VendeurApplication } from '@/types'
 
-export default function BecomeAgent() {
+export default function BecomeVendeur() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [fields, setFields] = useState<ApplicationField[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [existingApp, setExistingApp] = useState<AgentApplication | null>(null)
+  const [existingApp, setExistingApp] = useState<VendeurApplication | null>(null)
   const [responses, setResponses] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (location.state?.message) {
+      toast({
+        title: 'Information',
+        description: location.state.message,
+        variant: 'default',
+      })
+      window.history.replaceState({}, document.title)
+    }
+  }, [location.state])
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [fieldsRes, appRes] = await Promise.all([
           api.get('/auth/application-fields/active/'),
-          api.get('/auth/agent-application/'),
+          api.get('/auth/vendeur-application/'),
         ])
         setFields(Array.isArray(fieldsRes.data) ? fieldsRes.data : [])
         if (appRes.data.status && appRes.data.status !== 'none') {
@@ -50,7 +62,7 @@ export default function BecomeAgent() {
         .filter(([_, value]) => value.trim())
         .map(([field_id, value]) => ({ field_id, value }))
 
-      await api.post('/auth/agent-application/', { responses: responseList })
+      await api.post('/auth/vendeur-application/', { responses: responseList })
       toast({ title: 'Demande envoyée', description: 'Votre demande sera examinée par un administrateur.', variant: 'success' })
       navigate('/dashboard')
     } catch (err: unknown) {
@@ -63,12 +75,12 @@ export default function BecomeAgent() {
     }
   }
 
-  if (user?.role === 'agent' || user?.role === 'admin') {
+  if (user?.role === 'vendeur') {
     return (
       <div className="max-w-lg mx-auto text-center py-12">
         <Check className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-        <h2 className="text-xl font-bold text-slate-900 mb-2">Vous êtes déjà agent</h2>
-        <p className="text-slate-500">Votre compte est déjà enregistré en tant qu'agent immobilier.</p>
+        <h2 className="text-xl font-bold text-slate-900 mb-2">Vous êtes déjà vendeur</h2>
+        <p className="text-slate-500">Votre compte est enregistré en tant que vendeur immobilier.</p>
       </div>
     )
   }
@@ -76,7 +88,7 @@ export default function BecomeAgent() {
   if (existingApp?.status === 'pending') {
     return (
       <div className="max-w-lg mx-auto text-center py-12">
-        <Loader2 className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+        <Loader2 className="w-12 h-12 text-amber-500 mx-auto mb-4 animate-spin" />
         <h2 className="text-xl font-bold text-slate-900 mb-2">Demande en cours</h2>
         <p className="text-slate-500 mb-4">Votre demande est en cours d'examen par un administrateur.</p>
         <Badge variant="warning">En attente</Badge>
@@ -144,9 +156,9 @@ export default function BecomeAgent() {
           <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center">
             <UserPlus className="w-5 h-5" />
           </div>
-          Devenir agent
+          Devenir vendeur
         </h1>
-        <p className="text-sm text-slate-500 mt-1">Remplissez le formulaire ci-dessous pour postuler en tant qu'agent immobilier</p>
+        <p className="text-sm text-slate-500 mt-1">Remplissez le formulaire ci-dessous pour postuler en tant que vendeur immobilier</p>
       </div>
 
       <Card className="border-0 shadow-card">

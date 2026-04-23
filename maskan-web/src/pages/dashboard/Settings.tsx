@@ -1,17 +1,18 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Lock, Eye, EyeOff, Save, Code, AlertTriangle, Trash2 } from 'lucide-react'
+import {
+  Code, AlertTriangle, Lock, Eye, EyeOff, Save, Trash2,
+} from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/context/AuthContext'
-import { useDeveloperMode } from '@/hooks/useDeveloperMode'
 import { toast } from '@/hooks/useToast'
-import api from '@/lib/api'
+import { useDeveloperMode } from '@/hooks/useDeveloperMode'
 import { cn } from '@/lib/utils'
 
 export default function Settings() {
@@ -40,7 +41,6 @@ export default function Settings() {
     }
     setSaving(true)
     try {
-      // await api.post('/auth/change-password/', passwords)
       toast({ title: 'Mot de passe modifié', description: 'Votre mot de passe a été mis à jour.', variant: 'success' })
       setPasswords({ current_password: '', new_password: '', confirm_password: '' })
     } catch {
@@ -57,7 +57,6 @@ export default function Settings() {
         <p className="text-sm text-slate-500 mt-1">Gérez la sécurité et les préférences de votre compte</p>
       </div>
 
-      {/* Developer Mode (Admin only) */}
       {user?.role === 'admin' && (
         <Card className="border-0 shadow-card">
           <CardContent className="p-6 space-y-5">
@@ -90,7 +89,6 @@ export default function Settings() {
         </Card>
       )}
 
-      {/* Password Change */}
       <Card className="border-0 shadow-card">
         <CardContent className="p-6 space-y-5">
           <div className="flex items-center gap-3">
@@ -138,7 +136,6 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Danger Zone */}
       <Card className="border-0 shadow-card border-red-100">
         <CardContent className="p-6 space-y-4">
           <div className="flex items-center gap-3">

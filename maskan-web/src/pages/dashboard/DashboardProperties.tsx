@@ -2,20 +2,28 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Building2, Plus, Edit, Trash2, Eye, MapPin,
+  Building2, Plus, Edit, Trash2, Eye, MapPin, Clock, CheckCircle, XCircle,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { toast } from '@/hooks/useToast'
 import api from '@/lib/api'
 import { formatPrice, cn } from '@/lib/utils'
-import type { Property } from '@/types'
+import type { Property, VerificationStatus } from '@/types'
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   available: { label: 'Disponible', color: 'bg-emerald-100 text-emerald-700' },
   sold: { label: 'Vendu', color: 'bg-red-100 text-red-700' },
   rented: { label: 'Loué', color: 'bg-amber-100 text-amber-700' },
   pending: { label: 'En attente', color: 'bg-slate-100 text-slate-600' },
+}
+
+const verificationConfig: Record<VerificationStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'warning'; icon: React.ComponentType<{ className?: string }> }> = {
+  pending: { label: 'En attente', variant: 'warning', icon: Clock },
+  approved: { label: 'Approuvé', variant: 'default', icon: CheckCircle },
+  rejected: { label: 'Rejeté', variant: 'destructive', icon: XCircle },
 }
 
 const placeholderImages: Record<string, string> = {
@@ -46,11 +54,19 @@ export default function DashboardProperties() {
     try {
       await api.delete(`/properties/${id}/`)
       setProperties(prev => prev.filter(p => p.id !== id))
+      toast({ title: 'Bien supprimé', variant: 'success' })
     } catch {
-      alert('Erreur lors de la suppression')
+      toast({ title: 'Erreur lors de la suppression', variant: 'destructive' })
     } finally {
       setDeleting(null)
     }
+  }
+
+  const stats = {
+    total: properties.length,
+    pending: properties.filter(p => p.verification_status === 'pending').length,
+    approved: properties.filter(p => p.verification_status === 'approved').length,
+    rejected: properties.filter(p => p.verification_status === 'rejected').length,
   }
 
   return (
@@ -58,7 +74,9 @@ export default function DashboardProperties() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Mes biens</h1>
-          <p className="text-sm text-slate-500 mt-1">{properties.length} biens publiés</p>
+          <p className="text-sm text-slate-500 mt-1">
+            {stats.total} biens | {stats.approved} approuvés | {stats.pending} en attente
+          </p>
         </div>
         <Link to="/dashboard/add-property">
           <Button className="bg-teal-700 hover:bg-teal-800 cursor-pointer">
@@ -67,6 +85,17 @@ export default function DashboardProperties() {
           </Button>
         </Link>
       </div>
+
+      {stats.pending > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 text-amber-800">
+            <Clock className="w-5 h-5" />
+            <p className="text-sm font-medium">
+              {stats.pending} bien{stats.pending > 1 ? 's' : ''} en attente de vérification. Les biens seront publiés après approbation.
+            </p>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-4">
@@ -99,6 +128,8 @@ export default function DashboardProperties() {
         <div className="space-y-3">
           {properties.map((property, i) => {
             const status = statusConfig[property.status] || statusConfig.available
+            const verification = verificationConfig[property.verification_status as VerificationStatus] || verificationConfig.pending
+            const VerificationIcon = verification.icon
             const img = property.images?.[0]
               ? `data:image/jpeg;base64,${property.images[0].image_data}`
               : placeholderImages[property.property_type] || placeholderImages.apartment
@@ -114,17 +145,24 @@ export default function DashboardProperties() {
                   <CardContent className="p-4">
                     <div className="flex items-center gap-4">
                       {/* Thumbnail */}
-                      <div className="w-24 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                      <div className="w-24 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-slate-100">
                         <img src={img} alt={property.title} className="w-full h-full object-cover" />
                       </div>
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <h3 className="text-sm font-semibold text-slate-900 truncate">{property.title}</h3>
                           <span className={cn("px-2 py-0.5 rounded-md text-[10px] font-semibold", status.color)}>
                             {status.label}
                           </span>
+                          <Badge variant={verification.variant} className={cn(
+                            "text-[10px] px-1.5",
+                            verification.variant === 'default' && "bg-emerald-600"
+                          )}>
+                            <VerificationIcon className="w-3 h-3 mr-1" />
+                            {verification.label}
+                          </Badge>
                         </div>
                         <div className="flex items-center gap-3 text-xs text-slate-500">
                           <span className="flex items-center gap-1">
@@ -135,24 +173,32 @@ export default function DashboardProperties() {
                           <span>{property.bedrooms} ch.</span>
                         </div>
                         <p className="text-sm font-bold text-teal-700 mt-1">{formatPrice(property.price)}</p>
+                        {property.verification_status === 'rejected' && property.rejection_reason && (
+                          <p className="text-xs text-red-600 mt-1 bg-red-50 rounded px-2 py-1">
+                            Raison du refus: {property.rejection_reason}
+                          </p>
+                        )}
                       </div>
 
                       {/* Actions */}
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <Link to={`/properties/${property.id}`}>
-                          <Button variant="ghost" size="sm" className="cursor-pointer">
+                          <Button variant="ghost" size="sm" className="cursor-pointer" title="Voir">
                             <Eye className="w-4 h-4" />
                           </Button>
                         </Link>
-                        <Button variant="ghost" size="sm" className="cursor-pointer">
-                          <Edit className="w-4 h-4" />
-                        </Button>
+                        {property.verification_status !== 'approved' && (
+                          <Button variant="ghost" size="sm" className="cursor-pointer" title="Modifier">
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
                           className="text-red-600 hover:text-red-700 hover:bg-red-50 cursor-pointer"
                           onClick={() => handleDelete(property.id)}
                           disabled={deleting === property.id}
+                          title="Supprimer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>

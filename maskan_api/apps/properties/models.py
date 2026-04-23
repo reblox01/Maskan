@@ -23,12 +23,15 @@ class Property(models.Model):
         RENTED = "rented", "Loué"
         PENDING = "pending", "En attente"
 
-    # Primary
+    class VerificationStatus(models.TextChoices):
+        PENDING = "pending", "En attente"
+        APPROVED = "approved", "Approuvé"
+        REJECTED = "rejected", "Rejeté"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=200, db_index=True)
     description = models.TextField(blank=True)
 
-    # Classification
     property_type = models.CharField(
         max_length=20, choices=PropertyType.choices, db_index=True
     )
@@ -36,7 +39,6 @@ class Property(models.Model):
         max_length=10, choices=Status.choices, default=Status.AVAILABLE, db_index=True
     )
 
-    # Pricing
     price = models.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -45,7 +47,6 @@ class Property(models.Model):
     )
     currency = models.CharField(max_length=3, default="MAD")
 
-    # Specifications
     area_sqm = models.PositiveIntegerField(
         help_text="Area in square meters",
         validators=[MinValueValidator(1)],
@@ -53,7 +54,6 @@ class Property(models.Model):
     bedrooms = models.PositiveSmallIntegerField(default=0)
     bathrooms = models.PositiveSmallIntegerField(default=0)
 
-    # Location
     address = models.CharField(max_length=300)
     city = models.CharField(max_length=100, db_index=True)
     region = models.CharField(max_length=100, db_index=True)
@@ -72,19 +72,33 @@ class Property(models.Model):
         validators=[MinValueValidator(-180), MaxValueValidator(180)],
     )
 
-    # Ownership
     agent = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="properties",
-        limit_choices_to={"role__in": ["agent", "admin"]},
+        limit_choices_to={"role__in": ["vendeur", "admin"]},
     )
 
-    # Flags
-    is_published = models.BooleanField(default=True, db_index=True)
+    is_published = models.BooleanField(default=False, db_index=True)
+    is_verified = models.BooleanField(default=False, db_index=True)
     is_featured = models.BooleanField(default=False, db_index=True)
 
-    # Timestamps
+    verification_status = models.CharField(
+        max_length=10,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.PENDING,
+        db_index=True,
+    )
+    rejection_reason = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_properties",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -92,7 +106,7 @@ class Property(models.Model):
         verbose_name_plural = "properties"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["status", "is_published"]),
+            models.Index(fields=["verification_status", "is_published"]),
             models.Index(fields=["property_type", "city"]),
             models.Index(fields=["price"]),
             models.Index(fields=["-created_at"]),
@@ -104,6 +118,10 @@ class Property(models.Model):
     @property
     def main_image(self):
         return self.images.order_by("order").first()
+
+    @property
+    def is_approved(self):
+        return self.verification_status == self.VerificationStatus.APPROVED
 
 
 class PropertyImage(models.Model):

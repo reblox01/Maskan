@@ -99,8 +99,8 @@ export default function UserManagement() {
 
   const stats = [
     { label: 'Total', value: users.length, icon: Users, color: 'bg-teal-50 text-teal-700' },
-    { label: 'Agents', value: users.filter(u => u.role === 'agent').length, icon: UserCheck, color: 'bg-blue-50 text-blue-700' },
-    { label: 'Clients', value: users.filter(u => u.role === 'client').length, icon: Users, color: 'bg-amber-50 text-amber-700' },
+    { label: 'Vendeurs', value: users.filter(u => u.role === 'vendeur').length, icon: UserCheck, color: 'bg-blue-50 text-blue-700' },
+    { label: 'Acquereurs', value: users.filter(u => u.role === 'acquereur').length, icon: Users, color: 'bg-amber-50 text-amber-700' },
   ]
 
   return (
