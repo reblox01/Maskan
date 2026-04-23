@@ -140,7 +140,7 @@ export default function DashboardLayout() {
 
   const sidebar = (
     <div className="flex flex-col h-full">
-      <div className="pt-2 px-4 pb-4 shrink-0">
+      <div className="p-4 shrink-0">
         <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
           <div className="w-10 h-10 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
             {user.username.charAt(0).toUpperCase()}
@@ -166,7 +166,7 @@ export default function DashboardLayout() {
 
       <Separator className="shrink-0" />
 
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto overflow-x-hidden">
+      <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
         {!collapsed && <p className="px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Navigation</p>}
         {navItems.map((item) => <SidebarNavItem key={item.to} item={item} collapsed={collapsed} />)}
 
@@ -203,7 +203,7 @@ export default function DashboardLayout() {
 
       <Separator className="shrink-0" />
 
-      <div className="p-3 space-y-1 shrink-0">
+      <div className="px-3 py-2 space-y-1 shrink-0">
         <SidebarNavItem item={{ to: '/', icon: Home, label: 'Retour au site' }} collapsed={collapsed} />
         <button
           onClick={handleLogout}
