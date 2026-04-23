@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Menu, X, Home, User, LogOut, Settings, LayoutDashboard, Building2,
   ChevronDown, Search, TrendingUp, Heart, Building, ArrowLeftRight,
+  UserPlus, BadgeCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -169,8 +170,26 @@ export default function Navbar() {
                       <DropdownMenuItem onClick={handleSwitchRole} className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
                         <ArrowLeftRight className="w-4 h-4 text-teal-600" />
                         <span>
-                          Passer en mode {user.current_mode === 'vendeur' ? 'Acquereur' : 'Vendeur'}
+                          {user.current_mode === 'vendeur' ? 'Passer en mode Acquereur' : 'Passer en mode Vendeur'}
                         </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to="/dashboard/add-property" className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
+                          <Building2 className="w-4 h-4 text-teal-600" />
+                          <span>Publier un bien</span>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+
+                  {user.role === 'acquereur' && (
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link to="/dashboard/become-vendeur" className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
+                          <UserPlus className="w-4 h-4 text-teal-600" />
+                          <span>Devenir vendeur</span>
+                        </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                     </>
@@ -241,6 +260,19 @@ export default function Navbar() {
                   <>
                     <Link to="/dashboard" onClick={() => setMobileOpen(false)}>
                       <Button variant="ghost" className="w-full justify-start cursor-pointer"><LayoutDashboard className="w-4 h-4 mr-2" />Tableau de bord</Button>
+                    </Link>
+                    {user.role === 'vendeur' && (
+                      <Link to="/dashboard/add-property" onClick={() => setMobileOpen(false)}>
+                        <Button variant="ghost" className="w-full justify-start cursor-pointer"><Building2 className="w-4 h-4 mr-2" />Publier un bien</Button>
+                      </Link>
+                    )}
+                    {user.role === 'acquereur' && (
+                      <Link to="/dashboard/become-vendeur" onClick={() => setMobileOpen(false)}>
+                        <Button variant="ghost" className="w-full justify-start cursor-pointer"><UserPlus className="w-4 h-4 mr-2" />Devenir vendeur</Button>
+                      </Link>
+                    )}
+                    <Link to="/dashboard/saved" onClick={() => setMobileOpen(false)}>
+                      <Button variant="ghost" className="w-full justify-start cursor-pointer"><Heart className="w-4 h-4 mr-2" />Favoris</Button>
                     </Link>
                     <Button variant="ghost" className="w-full justify-start cursor-pointer text-red-600" onClick={() => { logout(); setMobileOpen(false) }}>
                       <LogOut className="w-4 h-4 mr-2" />Déconnexion

@@ -52,24 +52,28 @@ export default function DashboardLayout() {
   }
 
   const role = user.role
-  const isVendeur = role === 'vendeur' || role === 'admin'
-  const isVendeurActive = user.current_mode === 'vendeur'
+  const currentMode = user.current_mode || role
+  const isAdmin = role === 'admin'
+  const isVendeur = role === 'vendeur'
+  const isVendeurActive = currentMode === 'vendeur'
+
+  const effectiveMode = isAdmin ? 'admin' : currentMode
 
   const navItems = [
-    { to: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', roles: ['admin', 'vendeur', 'acquereur'] },
-    { to: '/dashboard/properties', icon: Building2, label: 'Mes biens', roles: ['admin', 'vendeur'] },
-    { to: '/dashboard/add-property', icon: Building2, label: 'Ajouter un bien', roles: ['admin', 'vendeur'] },
-    { to: '/dashboard/saved', icon: Heart, label: 'Favoris', roles: ['acquereur', 'admin'] },
-    { to: '/dashboard/stats', icon: BarChart3, label: 'Statistiques', roles: ['admin', 'vendeur'] },
-    { to: '/dashboard/become-vendeur', icon: UserPlus, label: 'Devenir vendeur', roles: ['acquereur'] },
-  ].filter(item => item.roles.includes(role))
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', modes: ['admin', 'vendeur', 'acquereur'] },
+    { to: '/dashboard/properties', icon: Building2, label: 'Mes biens', modes: ['admin', 'vendeur'] },
+    { to: '/dashboard/add-property', icon: Building2, label: 'Ajouter un bien', modes: ['admin', 'vendeur'] },
+    { to: '/dashboard/saved', icon: Heart, label: 'Favoris', modes: ['acquereur', 'admin'] },
+    { to: '/dashboard/stats', icon: BarChart3, label: 'Statistiques', modes: ['admin', 'vendeur'] },
+    { to: '/dashboard/become-vendeur', icon: UserPlus, label: 'Devenir vendeur', modes: ['acquereur'] },
+  ].filter(item => item.modes.includes(effectiveMode))
 
   const adminItems = [
-    { to: '/dashboard/user-management', icon: Users, label: 'Utilisateurs', roles: ['admin'] },
-    { to: '/dashboard/vendeur-applications', icon: ClipboardList, label: 'Candidatures', roles: ['admin'] },
-    { to: '/dashboard/property-verification', icon: ShieldCheck, label: 'Vérification biens', roles: ['admin'] },
-    { to: '/dashboard/application-fields', icon: ToggleLeft, label: 'Config. champs', roles: ['admin'] },
-  ].filter(item => item.roles.includes(role))
+    { to: '/dashboard/user-management', icon: Users, label: 'Utilisateurs', modes: ['admin'] },
+    { to: '/dashboard/vendeur-applications', icon: ClipboardList, label: 'Candidatures', modes: ['admin'] },
+    { to: '/dashboard/property-verification', icon: ShieldCheck, label: 'Vérification biens', modes: ['admin'] },
+    { to: '/dashboard/application-fields', icon: ToggleLeft, label: 'Config. champs', modes: ['admin'] },
+  ].filter(item => item.modes.includes(effectiveMode))
 
   const accountItems = [
     { to: '/dashboard/profile', icon: User, label: 'Mon profil' },

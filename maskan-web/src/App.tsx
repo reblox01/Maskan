@@ -8,6 +8,7 @@ import PropertyDetail from '@/pages/PropertyDetail'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import Estimate from '@/pages/Estimate'
+import VendeurSignupPage from '@/pages/VendeurSignupPage'
 import DashboardHome from '@/pages/dashboard/DashboardHome'
 import DashboardProperties from '@/pages/dashboard/DashboardProperties'
 import AddProperty from '@/pages/dashboard/AddProperty'
@@ -66,6 +67,11 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/estimate" element={<Estimate />} />
+            <Route path="/vendeur-signup" element={
+              <ProtectedRoute>
+                <VendeurSignupPage />
+              </ProtectedRoute>
+            } />
 
             {/* Dashboard routes */}
             <Route path="/dashboard" element={

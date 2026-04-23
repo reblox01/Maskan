@@ -57,6 +57,7 @@ class RegisterView(generics.CreateAPIView):
         }
         if needs_application:
             response_data["needs_application"] = True
+            response_data["application_pending"] = True
             response_data["message"] = "Compte créé. Veuillez remplir le formulaire de candidature pour devenir vendeur."
         return Response(response_data, status=status.HTTP_201_CREATED)
 

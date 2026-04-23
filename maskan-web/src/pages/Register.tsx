@@ -4,10 +4,12 @@ import { motion } from 'framer-motion'
 import { Eye, EyeOff, Home, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 
 export default function Register() {
   const navigate = useNavigate()
+  const { register } = useAuth()
   const [formData, setFormData] = useState({
     email: '',
     username: '',
@@ -71,7 +73,7 @@ export default function Register() {
 
     setLoading(true)
     try {
-      const response = await api.post('/auth/register/', {
+      await register({
         email: formData.email,
         username: formData.username,
         password: formData.password,
@@ -80,8 +82,8 @@ export default function Register() {
         role: formData.role,
       })
 
-      if (response.data.needs_application) {
-        navigate('/dashboard/become-vendeur', { state: { message: response.data.message } })
+      if (formData.role === 'vendeur') {
+        navigate('/vendeur-signup')
       } else {
         navigate('/')
       }

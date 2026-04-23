@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { UserPlus, Check, AlertCircle, Loader2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -15,25 +15,13 @@ import api from '@/lib/api'
 import type { ApplicationField, VendeurApplication } from '@/types'
 
 export default function BecomeVendeur() {
-  const { user } = useAuth()
+  const { user, refreshUser } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
   const [fields, setFields] = useState<ApplicationField[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [existingApp, setExistingApp] = useState<VendeurApplication | null>(null)
   const [responses, setResponses] = useState<Record<string, string>>({})
-
-  useEffect(() => {
-    if (location.state?.message) {
-      toast({
-        title: 'Information',
-        description: location.state.message,
-        variant: 'default',
-      })
-      window.history.replaceState({}, document.title)
-    }
-  }, [location.state])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -64,6 +52,7 @@ export default function BecomeVendeur() {
 
       await api.post('/auth/vendeur-application/', { responses: responseList })
       toast({ title: 'Demande envoyée', description: 'Votre demande sera examinée par un administrateur.', variant: 'success' })
+      await refreshUser()
       navigate('/dashboard')
     } catch (err: unknown) {
       const msg = err && typeof err === 'object' && 'response' in err
@@ -102,8 +91,10 @@ export default function BecomeVendeur() {
         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
         <h2 className="text-xl font-bold text-slate-900 mb-2">Demande refusée</h2>
         <p className="text-slate-500 mb-2">{existingApp.admin_notes || 'Votre demande a été refusée.'}</p>
-        <p className="text-sm text-slate-400 mb-6">Vous pouvez soumettre une nouvelle demande avec des informations mises à jour.</p>
-        <Button onClick={() => setExistingApp(null)} className="bg-teal-700 hover:bg-teal-800 cursor-pointer">Soumettre à nouveau</Button>
+        <p className="text-sm text-slate-400 mb-6">Vous pouvez soumettre une nouvelle demande.</p>
+        <Button onClick={() => setExistingApp(null)} className="bg-teal-700 hover:bg-teal-800 cursor-pointer">
+          Soumettre à nouveau
+        </Button>
       </div>
     )
   }
@@ -158,7 +149,7 @@ export default function BecomeVendeur() {
           </div>
           Devenir vendeur
         </h1>
-        <p className="text-sm text-slate-500 mt-1">Remplissez le formulaire ci-dessous pour postuler en tant que vendeur immobilier</p>
+        <p className="text-sm text-slate-500 mt-1">Remplissez le formulaire ci-dessous pour postuler en tant que vendeur</p>
       </div>
 
       <Card className="border-0 shadow-card">
