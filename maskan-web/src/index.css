@@ -41,6 +41,7 @@
 }
 
 @layer utilities {
+  /* Custom scrollbar - apply with class custom-scrollbar */
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -73,5 +74,38 @@
 
   .custom-scrollbar-dark::-webkit-scrollbar-thumb:hover {
     @apply bg-slate-500;
+  }
+
+  /* Global scrollbar - applies to whole website */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.slate.200') transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: theme('colors.slate.200');
+    border-radius: 9999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: theme('colors.slate.300');
+  }
+
+  /* Dark mode scrollbar */
+  .dark *::-webkit-scrollbar-thumb {
+    background-color: theme('colors.slate.600');
+  }
+
+  .dark *::-webkit-scrollbar-thumb:hover {
+    background-color: theme('colors.slate.500');
   }
 }

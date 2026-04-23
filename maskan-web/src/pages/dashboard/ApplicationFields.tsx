@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ToggleLeft, Plus, Edit, Trash2, GripVertical, Save, Loader2 } from 'lucide-react'
+import { ToggleLeft, Plus, Edit, Trash2, GripVertical, Save, Loader2, Eye, X } from 'lucide-react'
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragOverlay } from '@dnd-kit/core'
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,6 +27,131 @@ const fieldTypeLabels: Record<string, string> = {
   file: 'Fichier',
 }
 
+function SortableField({ field, onEdit, onDelete, onToggle }: { field: ApplicationField; onEdit: () => void; onDelete: () => void; onToggle: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: field.id })
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className={cn(!field.is_active && "opacity-50")}>
+      <Card className="border-0 shadow-card">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing flex-shrink-0">
+              <GripVertical className="w-4 h-4 text-slate-300" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-slate-900">{field.label}</p>
+                <Badge variant="outline" className="text-[10px]">{fieldTypeLabels[field.field_type] || field.field_type}</Badge>
+                {field.is_required && <Badge variant="secondary" className="text-[10px]">Obligatoire</Badge>}
+              </div>
+              {field.placeholder && <p className="text-xs text-slate-400 mt-0.5">Placeholder: {field.placeholder}</p>}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Switch checked={field.is_active} onCheckedChange={onToggle} />
+              <Button variant="ghost" size="sm" className="cursor-pointer" onClick={onEdit}><Edit className="w-4 h-4" /></Button>
+              <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 cursor-pointer" onClick={onDelete}><Trash2 className="w-4 h-4" /></Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function FieldPreview({ field }: { field: ApplicationField }) {
+  const [value, setValue] = useState('')
+  const [checked, setChecked] = useState(false)
+
+  const label = field.is_required ? `${field.label} *` : field.label
+
+  switch (field.field_type) {
+    case 'text':
+      return (
+        <div>
+          <Label className="mb-1.5 block">{label}</Label>
+          <Input 
+            placeholder={field.placeholder || ''} 
+            value={value} 
+            onChange={(e) => setValue(e.target.value)}
+            className="w-full"
+          />
+          {field.help_text && <p className="text-xs text-slate-500 mt-1">{field.help_text}</p>}
+        </div>
+      )
+    case 'number':
+      return (
+        <div>
+          <Label className="mb-1.5 block">{label}</Label>
+          <Input 
+            type="number"
+            placeholder={field.placeholder || ''} 
+            value={value} 
+            onChange={(e) => setValue(e.target.value)}
+            className="w-full"
+          />
+          {field.help_text && <p className="text-xs text-slate-500 mt-1">{field.help_text}</p>}
+        </div>
+      )
+    case 'textarea':
+      return (
+        <div>
+          <Label className="mb-1.5 block">{label}</Label>
+          <textarea 
+            placeholder={field.placeholder || ''} 
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="w-full min-h-[100px] px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
+          />
+          {field.help_text && <p className="text-xs text-slate-500 mt-1">{field.help_text}</p>}
+        </div>
+      )
+    case 'select':
+      return (
+        <div>
+          <Label className="mb-1.5 block">{label}</Label>
+          <Select value={value} onValueChange={setValue}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder={field.placeholder || 'Sélectionner...'} />
+            </SelectTrigger>
+            <SelectContent>
+              {(field.choices || []).map((choice) => (
+                <SelectItem key={choice} value={choice}>{choice}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {field.help_text && <p className="text-xs text-slate-500 mt-1">{field.help_text}</p>}
+        </div>
+      )
+    case 'checkbox':
+      return (
+        <div className="flex items-center gap-2">
+          <input 
+            type="checkbox" 
+            id={field.id}
+            checked={checked}
+            onChange={(e) => setChecked(e.target.checked)}
+            className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+          />
+          <Label htmlFor={field.id} className="text-sm font-medium text-slate-700">{label}</Label>
+        </div>
+      )
+    default:
+      return (
+        <div>
+          <Label className="mb-1.5 block">{label}</Label>
+          <Input placeholder={field.placeholder || ''} className="w-full" />
+        </div>
+      )
+  }
+}
+
 export default function ApplicationFields() {
   const { user } = useAuth()
   const [fields, setFields] = useState<ApplicationField[]>([])
@@ -32,16 +160,25 @@ export default function ApplicationFields() {
   const [editingField, setEditingField] = useState<ApplicationField | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [savingOrder, setSavingOrder] = useState(false)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
 
   const [form, setForm] = useState({
     label: '',
     field_type: 'text' as string,
     placeholder: '',
     help_text: '',
-    choices: '',
+    choices: [] as string[],
     is_required: true,
     is_active: true,
   })
+
+  const [newOption, setNewOption] = useState('')
 
   useEffect(() => {
     if (user?.role !== 'admin') return
@@ -58,7 +195,7 @@ export default function ApplicationFields() {
 
   const openCreate = () => {
     setEditingField(null)
-    setForm({ label: '', field_type: 'text', placeholder: '', help_text: '', choices: '', is_required: true, is_active: true })
+    setForm({ label: '', field_type: 'text', placeholder: '', help_text: '', choices: [], is_required: true, is_active: true })
     setDialogOpen(true)
   }
 
@@ -69,11 +206,25 @@ export default function ApplicationFields() {
       field_type: field.field_type,
       placeholder: field.placeholder,
       help_text: field.help_text,
-      choices: (field.choices || []).join(', '),
+      choices: field.choices || [],
       is_required: field.is_required,
       is_active: field.is_active,
     })
     setDialogOpen(true)
+  }
+
+  const addOption = () => {
+    if (!newOption.trim()) return
+    if (form.choices.includes(newOption.trim())) {
+      toast({ title: 'Erreur', description: 'Cette option existe déjà', variant: 'destructive' })
+      return
+    }
+    setForm(prev => ({ ...prev, choices: [...prev.choices, newOption.trim()] }))
+    setNewOption('')
+  }
+
+  const removeOption = (option: string) => {
+    setForm(prev => ({ ...prev, choices: prev.choices.filter(c => c !== option) }))
   }
 
   const handleSubmit = async () => {
@@ -81,11 +232,15 @@ export default function ApplicationFields() {
       toast({ title: 'Erreur', description: 'Le label est obligatoire', variant: 'destructive' })
       return
     }
+    if (form.field_type === 'select' && form.choices.length === 0) {
+      toast({ title: 'Erreur', description: 'Ajoutez au moins une option', variant: 'destructive' })
+      return
+    }
     setSubmitting(true)
     try {
       const payload = {
         ...form,
-        choices: form.field_type === 'select' ? form.choices.split(',').map(c => c.trim()).filter(Boolean) : [],
+        choices: form.field_type === 'select' ? form.choices : [],
       }
       if (editingField) {
         await api.put(`/auth/application-fields/${editingField.id}/`, payload)
@@ -123,12 +278,36 @@ export default function ApplicationFields() {
     }
   }
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = fields.findIndex(f => f.id === active.id)
+    const newIndex = fields.findIndex(f => f.id === over.id)
+    const newOrder = arrayMove(fields, oldIndex, newIndex)
+    setFields(newOrder)
+
+    setSavingOrder(true)
+    try {
+      const order = newOrder.map(f => f.id)
+      await api.patch('/auth/application-fields/reorder/', { order })
+      toast({ title: 'Ordre mis à jour', variant: 'success' })
+    } catch {
+      toast({ title: 'Erreur', description: "Impossible de sauvegarder l'ordre", variant: 'destructive' })
+      fetchFields()
+    } finally {
+      setSavingOrder(false)
+    }
+  }
+
+  const activeFields = fields.filter(f => f.is_active)
+
   if (user?.role !== 'admin') {
     return <div className="text-center py-12"><p className="text-slate-500">Accès réservé aux administrateurs</p></div>
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6 custom-scrollbar">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
@@ -139,9 +318,14 @@ export default function ApplicationFields() {
           </h1>
           <p className="text-sm text-slate-500 mt-1">Gérez les champs du formulaire de demande d'agent</p>
         </div>
-        <Button onClick={openCreate} className="bg-teal-700 hover:bg-teal-800 cursor-pointer">
-          <Plus className="w-4 h-4 mr-2" /> Ajouter
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setPreviewOpen(true)} className="cursor-pointer">
+            <Eye className="w-4 h-4 mr-2" />Aperçu
+          </Button>
+          <Button onClick={openCreate} className="bg-teal-700 hover:bg-teal-800 cursor-pointer">
+            <Plus className="w-4 h-4 mr-2" />Ajouter
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -156,37 +340,36 @@ export default function ApplicationFields() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-2">
-          {fields.map((field, i) => (
-            <motion.div key={field.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-              <Card className={cn("border-0 shadow-card transition-opacity", !field.is_active && "opacity-50")}>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <GripVertical className="w-4 h-4 text-slate-300 cursor-grab flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-slate-900">{field.label}</p>
-                        <Badge variant="outline" className="text-[10px]">{fieldTypeLabels[field.field_type] || field.field_type}</Badge>
-                        {field.is_required && <Badge variant="secondary" className="text-[10px]">Obligatoire</Badge>}
-                      </div>
-                      {field.placeholder && <p className="text-xs text-slate-400 mt-0.5">Placeholder: {field.placeholder}</p>}
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <Switch checked={field.is_active} onCheckedChange={() => handleToggleActive(field)} />
-                      <Button variant="ghost" size="sm" className="cursor-pointer" onClick={() => openEdit(field)}><Edit className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 cursor-pointer" onClick={() => setDeleteConfirm(field.id)}><Trash2 className="w-4 h-4" /></Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={fields.map(f => f.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2 custom-scrollbar">
+              {fields.map((field, i) => (
+                <motion.div key={field.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+                  <SortableField 
+                    field={field} 
+                    onEdit={() => openEdit(field)} 
+                    onDelete={() => setDeleteConfirm(field.id)} 
+                    onToggle={() => handleToggleActive(field)} 
+                  />
+                </motion.div>
+              ))}
+            </div>
+          </SortableContext>
+          <DragOverlay>
+            {null}
+          </DragOverlay>
+        </DndContext>
+      )}
+
+      {savingOrder && (
+        <div className="fixed bottom-4 right-4 bg-teal-700 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" />Sauvegarde en cours...
         </div>
       )}
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar">
           <DialogHeader>
             <DialogTitle>{editingField ? 'Modifier le champ' : 'Ajouter un champ'}</DialogTitle>
             <DialogDescription>Configurez les propriétés du champ du formulaire</DialogDescription>
@@ -198,7 +381,7 @@ export default function ApplicationFields() {
             </div>
             <div>
               <Label className="mb-1.5 block">Type de champ</Label>
-              <Select value={form.field_type} onValueChange={(v) => setForm(prev => ({ ...prev, field_type: v }))}>
+              <Select value={form.field_type} onValueChange={(v) => setForm(prev => ({ ...prev, field_type: v, choices: v === 'select' ? prev.choices : [] }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="text">Texte</SelectItem>
@@ -215,28 +398,85 @@ export default function ApplicationFields() {
             </div>
             <div>
               <Label className="mb-1.5 block">Texte d'aide</Label>
-              <Input value={form.help_text} onChange={(e) => setForm(prev => ({ ...prev, help_text: e.target.value }))} placeholder="Description du champ..." />
+              <Input value={form.help_text} onChange={(e) => setForm(prev => ({ ...prev, help_text: e.target.value }))} placeholder="Description..." />
             </div>
+
+            {/* Options pour select */}
             {form.field_type === 'select' && (
               <div>
-                <Label className="mb-1.5 block">Options (séparées par des virgules)</Label>
-                <Input value={form.choices} onChange={(e) => setForm(prev => ({ ...prev, choices: e.target.value }))} placeholder="Option A, Option B, Option C" />
+                <Label className="mb-1.5 block">Options</Label>
+                <div className="flex items-center gap-2 mb-2">
+                  <Input 
+                    value={newOption} 
+                    onChange={(e) => setNewOption(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addOption())}
+                    placeholder="Ajouter une option..." 
+                    className="flex-1"
+                  />
+                  <Button type="button" onClick={addOption} className="bg-teal-700 hover:bg-teal-800 cursor-pointer">
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar p-2 border border-slate-200 rounded-lg">
+                  {form.choices.length === 0 ? (
+                    <p className="text-sm text-slate-400">Aucune option ajoutée</p>
+                  ) : (
+                    form.choices.map((choice) => (
+                      <Badge key={choice} variant="secondary" className="pl-2 pr-1 py-1">
+                        {choice}
+                        <button 
+                          type="button"
+                          onClick={() => removeOption(choice)} 
+                          className="ml-1 p-0.5 hover:bg-slate-200 rounded cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))
+                  )}
+                </div>
               </div>
             )}
-            <div className="flex items-center justify-between">
-              <Label>Obligatoire</Label>
-              <Switch checked={form.is_required} onCheckedChange={(v) => setForm(prev => ({ ...prev, is_required: v }))} />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label>Actif</Label>
-              <Switch checked={form.is_active} onCheckedChange={(v) => setForm(prev => ({ ...prev, is_active: v }))} />
+
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <Switch checked={form.is_required} onCheckedChange={(v) => setForm(prev => ({ ...prev, is_required: v }))} />
+                <Label>Obligatoire</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.is_active} onCheckedChange={(v) => setForm(prev => ({ ...prev, is_active: v }))} />
+                <Label>Actif</Label>
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} className="cursor-pointer">Annuler</Button>
             <Button onClick={handleSubmit} disabled={submitting} className="bg-teal-700 hover:bg-teal-800 cursor-pointer">
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-2" />Sauvegarder</>}
+              {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              <Save className="w-4 h-4 mr-2" />Sauvegarder
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview Dialog */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto custom-scrollbar">
+          <DialogHeader>
+            <DialogTitle>Aperçu du formulaire</DialogTitle>
+            <DialogDescription>Voici comment le formulaire de demande d'agent sera affiché</DialogDescription>
+          </DialogHeader>
+          {activeFields.length === 0 ? (
+            <div className="py-8 text-center text-slate-500">Aucun champ actif configuré</div>
+          ) : (
+            <div className="space-y-4 py-4">
+              {activeFields.map(field => (
+                <FieldPreview key={field.id} field={field} />
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setPreviewOpen(false)} className="bg-teal-700 hover:bg-teal-800 cursor-pointer">Fermer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -245,8 +485,8 @@ export default function ApplicationFields() {
       <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Supprimer ce champ ?</DialogTitle>
-            <DialogDescription>Cette action est irréversible. Toutes les réponses associées seront supprimées.</DialogDescription>
+            <DialogTitle>Confirmer la suppression</DialogTitle>
+            <DialogDescription>Êtes-vous sûr de vouloir supprimer ce champ ? Cette action est irréversible.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteConfirm(null)} className="cursor-pointer">Annuler</Button>
