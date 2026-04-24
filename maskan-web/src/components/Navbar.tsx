@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Menu, X, Home, User, LogOut, Settings, LayoutDashboard, Building2,
   ChevronDown, Search, TrendingUp, Heart, Building, ArrowLeftRight,
-  UserPlus,
+  UserPlus, Briefcase,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -20,24 +20,28 @@ import api from '@/lib/api'
 const navItems = [
   {
     label: 'Acheter',
-    to: '/properties?type=buy',
+    to: '/properties?listing_type=vendre',
     children: [
-      { label: 'Appartements', to: '/properties?type=buy&property_type=apartment', icon: Building2 },
-      { label: 'Villas', to: '/properties?type=buy&property_type=villa', icon: Building },
-      { label: 'Studios', to: '/properties?type=buy&property_type=studio', icon: Home },
-      { label: 'Locaux commerciaux', to: '/properties?type=buy&property_type=commercial', icon: TrendingUp },
+      { label: 'Appartements', to: '/properties?listing_type=vendre&property_type=apartment', icon: Building2 },
+      { label: 'Villas', to: '/properties?listing_type=vendre&property_type=villa', icon: Building },
+      { label: 'Studios', to: '/properties?listing_type=vendre&property_type=studio', icon: Home },
+      { label: 'Maisons', to: '/properties?listing_type=vendre&property_type=house', icon: Building },
+      { label: 'Terrains', to: '/properties?listing_type=vendre&property_type=land', icon: TrendingUp },
+      { label: 'Commercial', to: '/properties?listing_type=vendre&property_type=commercial', icon: Building },
     ],
   },
   {
     label: 'Louer',
-    to: '/properties?type=rent',
+    to: '/properties?listing_type=louer',
     children: [
-      { label: 'Appartements', to: '/properties?type=rent&property_type=apartment', icon: Building2 },
-      { label: 'Studios', to: '/properties?type=rent&property_type=studio', icon: Home },
-      { label: 'Bureaux', to: '/properties?type=rent&property_type=office', icon: Building },
+      { label: 'Appartements', to: '/properties?listing_type=louer&property_type=apartment', icon: Building2 },
+      { label: 'Studios', to: '/properties?listing_type=louer&property_type=studio', icon: Home },
+      { label: 'Maisons', to: '/properties?listing_type=louer&property_type=house', icon: Building },
+      { label: 'Bureaux', to: '/properties?listing_type=louer&property_type=office', icon: Building },
+      { label: 'Commercial', to: '/properties?listing_type=louer&property_type=commercial', icon: Building },
     ],
   },
-  { label: 'Immobilier neuf', to: '/properties?type=new' },
+  { label: 'Consulting', to: '/consulting', icon: Briefcase },
   { label: 'Estimer', to: '/estimate' },
 ]
 

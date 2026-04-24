@@ -105,6 +105,10 @@ class PropertyListSerializer(serializers.ModelSerializer):
             "agent_name", "verification_status", "created_at",
         ]
 
+    def get_main_image_hash(self, obj):
+        main_img = obj.main_image
+        return main_img.image_hash if main_img else None
+
 
 class PropertyDetailSerializer(serializers.ModelSerializer):
     """Full property detail with images and verification info."""
@@ -126,6 +130,17 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
             "created_at", "updated_at",
         ]
 
+    def get_agent(self, obj):
+        if not obj.agent:
+            return None
+        return {
+            "id": str(obj.agent.id),
+            "name": obj.agent.first_name + " " + obj.agent.last_name if obj.agent.first_name else obj.agent.username,
+            "email": obj.agent.email,
+            "phone": getattr(obj.agent, "phone", None),
+            "profile_image": getattr(obj.agent, "profile_image", None),
+        }
+
 
 class PropertyCreateUpdateSerializer(serializers.ModelSerializer):
     """Serializer for creating/updating properties with nested images."""
@@ -135,9 +150,14 @@ class PropertyCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Property
         fields = [
-            "id", "title", "description", "property_type", "status",
+            "id", "title", "description", "property_type", "listing_type",
+            "room_label_format", "status",
             "price", "currency", "area_sqm", "bedrooms", "bathrooms",
-            "address", "city", "region", "latitude", "longitude",
+            "address", "city", "region", "neighborhood",
+            "latitude", "longitude",
+            "furnished", "is_turnkey", "deposit", "rent_price",
+            "floor", "available_from", "charges_included",
+            "consulting_enabled", "consulting_is_free", "consulting_price",
             "is_published", "images",
         ]
         read_only_fields = ["id"]
@@ -334,3 +354,57 @@ class PropertyAdminDetailSerializer(serializers.ModelSerializer):
                 "username": obj.reviewed_by.username,
             }
         return None
+
+
+class VisitRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Property
+        from .models import VisitRequest
+        fields = [
+            "id", "property", "client", "scheduled_date", "status", 
+            "notes", "created_at", "updated_at"
+        ]
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["client"] = {
+            "id": str(instance.client.id),
+            "username": instance.client.username,
+            "email": instance.client.email,
+            "phone": instance.client.phone,
+        }
+        data["property"] = {
+            "id": str(instance.related_property.id),
+            "title": instance.related_property.title,
+            "address": instance.related_property.address,
+            "city": instance.related_property.city,
+        }
+        return data
+
+
+class ConsultingRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Property
+        from .models import ConsultingRequest
+        fields = [
+            "id", "property", "client", "consulting_type", "is_free", "price",
+            "scheduled_date", "status", "client_notes", "admin_response",
+            "created_at", "updated_at"
+        ]
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["client"] = {
+            "id": str(instance.client.id),
+            "username": instance.client.username,
+            "email": instance.client.email,
+            "phone": instance.client.phone,
+        }
+        if instance.related_property:
+            data["property"] = {
+                "id": str(instance.related_property.id),
+                "title": instance.related_property.title,
+                "address": instance.related_property.address,
+                "city": instance.related_property.city,
+            }
+        return data

@@ -312,3 +312,109 @@ class PropertyVerifyView(APIView):
             "verification_status": property_obj.verification_status,
             "is_published": property_obj.is_published,
         })
+
+
+class VisitRequestView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            property_obj = Property.objects.get(pk=pk)
+        except Property.DoesNotExist:
+            return Response({"error": "Bien non trouvé."}, status=status.HTTP_404_NOT_FOUND)
+
+        if property_obj.verification_status != Property.VerificationStatus.APPROVED:
+            return Response({"error": "Vous ne pouvez pas demander une visite pour ce bien."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .serializers import VisitRequestSerializer
+        serializer = VisitRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        visit = serializer.save(property=property_obj, client=request.user)
+        return Response(VisitRequestSerializer(visit).data, status=status.HTTP_201_CREATED)
+
+    def get(self, request, pk):
+        try:
+            property_obj = Property.objects.get(pk=pk)
+        except Property.DoesNotExist:
+            return Response({"error": "Bien non trouvé."}, status=status.HTTP_404_NOT_FOUND)
+
+        visits = property_obj.visit_requests.all()
+        serializer = VisitRequestSerializer(visits, many=True)
+        return Response(serializer.data)
+
+
+class MyVisitRequestsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.role == "vendeur":
+            from apps.properties.models import Property
+            my_properties = Property.objects.filter(agent=user)
+            visits = VisitRequest.objects.filter(property__in=my_properties)
+        else:
+            visits = VisitRequest.objects.filter(client=user)
+        
+        serializer = VisitRequestSerializer(visits, many=True)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        visit_id = request.data.get("id")
+        new_status = request.data.get("status")
+        
+        try:
+            visit = VisitRequest.objects.get(id=visit_id, property__agent=request.user)
+        except VisitRequest.DoesNotExist:
+            return Response({"error": "Demande non trouvée."}, status=status.HTTP_404_NOT_FOUND)
+
+        if new_status in ["confirmed", "cancelled", "completed"]:
+            visit.status = new_status
+            visit.save()
+            serializer = VisitRequestSerializer(visit)
+            return Response(serializer.data)
+        
+        return Response({"error": "Statut invalide."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ConsultingRequestView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = ConsultingRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        visit = serializer.save(client=request.user)
+        return Response(ConsultingRequestSerializer(visit).data, status=status.HTTP_201_CREATED)
+
+    def get(self, request):
+        user = request.user
+        if user.role == "admin":
+            visits = ConsultingRequest.objects.all()
+        elif user.role == "vendeur":
+            from apps.properties.models import Property
+            my_properties = Property.objects.filter(agent=user, consulting_enabled=True)
+            visits = ConsultingRequest.objects.filter(property__in=my_properties)
+        else:
+            visits = ConsultingRequest.objects.filter(client=user)
+        
+        serializer = ConsultingRequestSerializer(visits, many=True)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        visit_id = request.data.get("id")
+        new_status = request.data.get("status")
+        
+        try:
+            visit = ConsultingRequest.objects.get(id=visit_id)
+        except ConsultingRequest.DoesNotExist:
+            return Response({"error": "Demande non trouvée."}, status=status.HTTP_404_NOT_FOUND)
+
+        if new_status in ["confirmed", "in_progress", "completed", "cancelled"]:
+            visit.status = new_status
+            if request.data.get("admin_response"):
+                visit.admin_response = request.data.get("admin_response")
+            visit.save()
+            serializer = ConsultingRequestSerializer(visit)
+            return Response(serializer.data)
+        
+        return Response({"error": "Statut invalide."}, status=status.HTTP_400_BAD_REQUEST)
