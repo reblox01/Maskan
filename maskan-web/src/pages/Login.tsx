@@ -5,6 +5,7 @@ import { Eye, EyeOff, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuth } from '@/context/AuthContext'
+import { toast } from '@/hooks/useToast'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -13,12 +14,10 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard'
 
-  // Already logged in - redirect
   useEffect(() => {
     if (!loading && user) {
       navigate(from, { replace: true })
@@ -35,10 +34,9 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
 
     if (!email || !password) {
-      setError('Veuillez remplir tous les champs.')
+      toast({ title: 'Veuillez remplir tous les champs.', variant: 'destructive' })
       return
     }
 
@@ -49,9 +47,9 @@ export default function Login() {
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {
         const axiosErr = err as { response?: { data?: { error?: string } } }
-        setError(axiosErr.response?.data?.error || 'Identifiants incorrects.')
+        toast({ title: axiosErr.response?.data?.error || 'Identifiants incorrects.', variant: 'destructive' })
       } else {
-        setError('Une erreur est survenue.')
+        toast({ title: 'Une erreur est survenue.', variant: 'destructive' })
       }
     } finally {
       setSubmitting(false)
@@ -66,7 +64,6 @@ export default function Login() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
           <div className="w-10 h-10 rounded-xl bg-teal-700 flex items-center justify-center">
             <Home className="w-6 h-6 text-white" />
@@ -79,12 +76,6 @@ export default function Login() {
           <p className="text-sm text-slate-500 text-center mb-6">
             Connectez-vous pour accéder à votre compte
           </p>
-
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
-              {error}
-            </div>
-          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -120,26 +111,31 @@ export default function Login() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                  aria-label={showPassword ? 'Masquer' : 'Afficher'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            <Button
-              type="submit"
-              className="w-full bg-teal-700 hover:bg-teal-800 cursor-pointer"
-              disabled={submitting}
-            >
+            <div className="flex items-center justify-between text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" className="rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                <span className="text-slate-600">Se souvenir</span>
+              </label>
+              <Link to="/forgot-password" className="text-teal-700 hover:underline cursor-pointer">
+                Mot de passe oublié ?
+              </Link>
+            </div>
+
+            <Button type="submit" disabled={submitting} className="w-full bg-teal-700 hover:bg-teal-800 cursor-pointer">
               {submitting ? 'Connexion...' : 'Se connecter'}
             </Button>
           </form>
 
           <p className="text-sm text-slate-500 text-center mt-6">
             Pas encore de compte ?{' '}
-            <Link to="/register" className="text-teal-700 font-medium hover:text-teal-800 cursor-pointer">
-              Créer un compte
+            <Link to="/register" className="text-teal-700 hover:underline font-medium cursor-pointer">
+              S'inscrire
             </Link>
           </p>
         </div>

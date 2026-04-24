@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, Home, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, Home, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuth } from '@/context/AuthContext'
+import { toast } from '@/hooks/useToast'
 
 export default function Register() {
   const navigate = useNavigate()
@@ -18,7 +19,6 @@ export default function Register() {
     role: 'acquereur',
   })
   const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
 
@@ -66,7 +66,6 @@ export default function Register() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
 
     if (!validate()) return
 
@@ -100,10 +99,10 @@ export default function Register() {
             setFieldErrors(serverErrors)
             return
           }
-          if (data.error) setError(String(data.error))
+          if (data.error) toast({ title: String(data.error), variant: 'destructive' })
         }
       }
-      setError('Une erreur est survenue lors de l\'inscription.')
+      toast({ title: "Une erreur est survenue lors de l'inscription.", variant: 'destructive' })
     } finally {
       setLoading(false)
     }
@@ -129,13 +128,6 @@ export default function Register() {
           <p className="text-sm text-slate-500 text-center mb-6">
             Rejoignez Maskan pour trouver votre bien idéal
           </p>
-
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center gap-2" role="alert">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              {error}
-            </div>
-          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -265,7 +257,7 @@ export default function Register() {
               </div>
               {formData.role === 'vendeur' && (
                 <p className="text-xs text-teal-600 mt-2 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
+                  <Info className="w-3 h-3" />
                   Vous devrez remplir un formulaire de candidature
                 </p>
               )}

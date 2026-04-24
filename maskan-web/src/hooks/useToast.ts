@@ -22,6 +22,17 @@ export function toast(options: ToastOptions & { title: string }) {
   }
 }
 
+export function toastPromise<T>(
+  promise: () => Promise<T>,
+  options: {
+    loading: string
+    success: (data: T) => string
+    error: (error: Error) => string
+  }
+) {
+  return sonnerToast.promise(promise, options) as unknown as Promise<T>
+}
+
 export function useToast() {
-  return { toast }
+  return { toast, toastPromise }
 }

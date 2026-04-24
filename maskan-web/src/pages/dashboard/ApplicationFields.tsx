@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { useAuth } from '@/context/AuthContext'
-import { toast } from '@/hooks/useToast'
+import { toast, toastPromise } from '@/hooks/useToast'
 import api from '@/lib/api'
 import { cn } from '@/lib/utils'
 import type { ApplicationField } from '@/types'
@@ -158,10 +158,8 @@ export default function ApplicationFields() {
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingField, setEditingField] = useState<ApplicationField | null>(null)
-  const [submitting, setSubmitting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const [savingOrder, setSavingOrder] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -216,7 +214,7 @@ export default function ApplicationFields() {
   const addOption = () => {
     if (!newOption.trim()) return
     if (form.choices.includes(newOption.trim())) {
-      toast({ title: 'Erreur', description: 'Cette option existe déjà', variant: 'destructive' })
+      toast({ title: 'Cette option existe déjà', variant: 'destructive' })
       return
     }
     setForm(prev => ({ ...prev, choices: [...prev.choices, newOption.trim()] }))
@@ -229,52 +227,83 @@ export default function ApplicationFields() {
 
   const handleSubmit = async () => {
     if (!form.label.trim()) {
-      toast({ title: 'Erreur', description: 'Le label est obligatoire', variant: 'destructive' })
+      toast({ title: 'Le label est obligatoire', variant: 'destructive' })
       return
     }
     if (form.field_type === 'select' && form.choices.length === 0) {
-      toast({ title: 'Erreur', description: 'Ajoutez au moins une option', variant: 'destructive' })
+      toast({ title: 'Ajoutez au moins une option', variant: 'destructive' })
       return
     }
-    setSubmitting(true)
+
+    const payload = {
+      ...form,
+      choices: form.field_type === 'select' ? form.choices : [],
+    }
+
     try {
-      const payload = {
-        ...form,
-        choices: form.field_type === 'select' ? form.choices : [],
-      }
-      if (editingField) {
-        await api.put(`/auth/application-fields/${editingField.id}/`, payload)
-        toast({ title: 'Champ modifié', description: `"${form.label}" a été mis à jour.`, variant: 'success' })
-      } else {
-        await api.post('/auth/application-fields/', payload)
-        toast({ title: 'Champ ajouté', description: `"${form.label}" a été créé.`, variant: 'success' })
-      }
-      setDialogOpen(false)
-      fetchFields()
+      await toastPromise(
+        async () => {
+          if (editingField) {
+            await api.put(`/auth/application-fields/${editingField.id}/`, payload)
+          } else {
+            await api.post('/auth/application-fields/', payload)
+          }
+        },
+        {
+          loading: editingField ? 'Mise à jour...' : 'Création...',
+          success: () => {
+            setDialogOpen(false)
+            fetchFields()
+            return editingField 
+              ? `"${form.label}" a été mis à jour.` 
+              : `"${form.label}" a été créé.`
+          },
+          error: () => 'Impossible de sauvegarder',
+        }
+      )
     } catch {
-      toast({ title: 'Erreur', description: 'Impossible de sauvegarder', variant: 'destructive' })
-    } finally {
-      setSubmitting(false)
+      // Error handled by toastPromise
     }
   }
 
   const handleDelete = async (id: string) => {
     try {
-      await api.delete(`/auth/application-fields/${id}/`)
-      setFields(prev => prev.filter(f => f.id !== id))
-      setDeleteConfirm(null)
-      toast({ title: 'Champ supprimé', variant: 'success' })
+      await toastPromise(
+        async () => {
+          await api.delete(`/auth/application-fields/${id}/`)
+          setFields(prev => prev.filter(f => f.id !== id))
+        },
+        {
+          loading: 'Suppression...',
+          success: () => {
+            setDeleteConfirm(null)
+            return 'Champ supprimé'
+          },
+          error: () => 'Impossible de supprimer',
+        }
+      )
     } catch {
-      toast({ title: 'Erreur', description: 'Impossible de supprimer', variant: 'destructive' })
+      // Error handled by toastPromise
     }
   }
 
   const handleToggleActive = async (field: ApplicationField) => {
     try {
-      await api.patch(`/auth/application-fields/${field.id}/`, { is_active: !field.is_active })
-      setFields(prev => prev.map(f => f.id === field.id ? { ...f, is_active: !f.is_active } : f))
+      await toastPromise(
+        async () => {
+          await api.patch(`/auth/application-fields/${field.id}/`, { is_active: !field.is_active })
+        },
+        {
+          loading: 'Mise à jour...',
+          success: () => {
+            setFields(prev => prev.map(f => f.id === field.id ? { ...f, is_active: !f.is_active } : f))
+            return field.is_active ? 'Champ désactivé' : 'Champ activé'
+          },
+          error: () => 'Impossible de mettre à jour',
+        }
+      )
     } catch {
-      toast({ title: 'Erreur', variant: 'destructive' })
+      // Error handled by toastPromise
     }
   }
 
@@ -287,16 +316,21 @@ export default function ApplicationFields() {
     const newOrder = arrayMove(fields, oldIndex, newIndex)
     setFields(newOrder)
 
-    setSavingOrder(true)
+    const order = newOrder.map(f => f.id)
+
     try {
-      const order = newOrder.map(f => f.id)
-      await api.patch('/auth/application-fields/reorder/', { order })
-      toast({ title: 'Ordre mis à jour', variant: 'success' })
+      await toastPromise(
+        async () => {
+          await api.patch('/auth/application-fields/reorder/', { order })
+        },
+        {
+          loading: 'Mise à jour...',
+          success: () => "Ordre mis à jour",
+          error: () => "Impossible de sauvegarder l'ordre",
+        }
+      )
     } catch {
-      toast({ title: 'Erreur', description: "Impossible de sauvegarder l'ordre", variant: 'destructive' })
       fetchFields()
-    } finally {
-      setSavingOrder(false)
     }
   }
 
@@ -359,12 +393,6 @@ export default function ApplicationFields() {
             {null}
           </DragOverlay>
         </DndContext>
-      )}
-
-      {savingOrder && (
-        <div className="fixed bottom-4 right-4 bg-teal-700 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" />Sauvegarde en cours...
-        </div>
       )}
 
       {/* Create/Edit Dialog */}
@@ -451,8 +479,7 @@ export default function ApplicationFields() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} className="cursor-pointer">Annuler</Button>
-            <Button onClick={handleSubmit} disabled={submitting} className="bg-teal-700 hover:bg-teal-800 cursor-pointer">
-              {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            <Button onClick={handleSubmit} className="bg-teal-700 hover:bg-teal-800 cursor-pointer">
               <Save className="w-4 h-4 mr-2" />Sauvegarder
             </Button>
           </DialogFooter>
