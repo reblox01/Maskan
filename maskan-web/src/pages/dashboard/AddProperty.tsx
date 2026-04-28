@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Building2, MapPin, DollarSign, Ruler, BedDouble, Bath, Image,
@@ -37,9 +37,12 @@ const propertyTypes = [
 
 export default function AddProperty() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
 
   const [form, setForm] = useState({
     title: '',
@@ -58,6 +61,48 @@ export default function AddProperty() {
 
   const [images, setImages] = useState<string[]>([])
 
+  // Check if we're editing an existing property
+  useEffect(() => {
+    const editId = searchParams.get('edit')
+    console.log('Edit ID from URL params:', editId)
+    if (editId) {
+      setEditingPropertyId(editId)
+      setIsEditing(true)
+      loadProperty(editId)
+    }
+  }, [])
+
+  const loadProperty = async (id: string) => {
+    try {
+      console.log('Loading property with ID:', id)
+      const response = await api.get(`/properties/${id}/`)
+      const property = response.data
+      console.log('Property data loaded:', property)
+      setForm({
+        title: property.title || '',
+        property_type: property.property_type || '',
+        description: property.description || '',
+        price: property.price?.toString() || '',
+        area_sqm: property.area_sqm?.toString() || '',
+        bedrooms: property.bedrooms?.toString() || '0',
+        bathrooms: property.bathrooms?.toString() || '0',
+        address: property.address || '',
+        city: property.city || '',
+        region: property.region || '',
+        latitude: property.latitude,
+        longitude: property.longitude,
+      })
+      // Load images if they exist
+      if (property.images && property.images.length > 0) {
+        setImages(property.images.map((img: any) => img.image_data))
+      }
+      console.log('Images loaded:', property.images)
+    } catch (err) {
+      console.error('Error loading property:', err)
+      toast({ title: 'Erreur', description: 'Impossible de charger le bien', variant: 'destructive' })
+    }
+  }
+
   const update = (field: string, value: string | number | null) => {
     setForm(prev => ({ ...prev, [field]: value }))
   }
@@ -70,47 +115,57 @@ export default function AddProperty() {
   }
 
   const handleSubmit = async () => {
+    if (!canProceed()) return
     setSubmitting(true)
     setError('')
+
     try {
-      const payload = {
+      const formData = new FormData()
+      Object.entries(form).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) {
+          formData.append(key, String(value))
+        }
+      })
+
+      // Handle images
+      const imageObjects = images.map((imageData, index) => ({
+        image_data: imageData,
+        order: index
+      }))
+
+      const data = {
         ...form,
-        price: Number(form.price),
-        area_sqm: Number(form.area_sqm),
-        bedrooms: Number(form.bedrooms),
-        bathrooms: Number(form.bathrooms),
-        latitude: form.latitude ? parseFloat(Number(form.latitude).toFixed(6)) : null,
-        longitude: form.longitude ? parseFloat(Number(form.longitude).toFixed(6)) : null,
-        is_published: true,
-        images: images.map((img, i) => ({ image_data: img, order: i })),
+        images: imageObjects
       }
-      const res = await api.post('/properties/', payload)
-      toast({ title: 'Bien publié', description: 'Votre bien a été ajouté avec succès.', variant: 'success' })
+
+      let res
+      if (isEditing && editingPropertyId) {
+        // Update existing property
+        res = await api.patch(`/properties/${editingPropertyId}/`, data)
+        toast({ title: 'Bien mis à jour', description: 'Votre bien a été mis à jour avec succès', variant: 'success' })
+      } else {
+        // Create new property
+        res = await api.post('/properties/', data)
+        toast({ title: 'Bien publié', description: 'Votre bien a été publié avec succès', variant: 'success' })
+      }
       navigate(`/properties/${res.data.id}`)
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: Record<string, string[]> } }
+    } catch (err: any) {
+      const axiosErr = err as any
+      if (axiosErr.response?.status === 400) {
         const data = axiosErr.response?.data
         if (data) {
           const messages = Object.values(data).flat()
           setError(messages.join(' '))
         } else {
-          setError('Erreur lors de la création du bien')
+          setError(isEditing ? 'Erreur lors de la mise à jour du bien' : 'Erreur lors de la création du bien')
         }
       } else {
-        setError('Erreur lors de la création du bien')
+        setError(isEditing ? 'Erreur lors de la mise à jour du bien' : 'Erreur lors de la création du bien')
       }
     } finally {
       setSubmitting(false)
     }
   }
-
-  return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Ajouter un bien</h1>
-        <p className="text-sm text-slate-500 mt-1">Publiez votre bien immobilier en quelques étapes</p>
-      </div>
 
       {/* Steps */}
       <div className="flex items-center gap-1.5">
@@ -130,9 +185,8 @@ export default function AddProperty() {
         ))}
       </div>
 
-      {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
-
-      <Card className="border-0 shadow-card">
+      return (
+    <div className="max-w-2xl mx-auto space-y-6">
         <CardContent className="p-6">
           {/* Step 1: Type & Title */}
           {step === 1 && (
@@ -277,12 +331,11 @@ export default function AddProperty() {
               </Button>
             ) : (
               <Button onClick={handleSubmit} disabled={submitting} className="bg-teal-700 hover:bg-teal-800 cursor-pointer">
-                {submitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Publication...</> : <><Check className="w-4 h-4 mr-2" />Publier le bien</>}
+                {submitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{isEditing ? 'Mise à jour...' : 'Publication...'}</> : <><Check className="w-4 h-4 mr-2" />{isEditing ? 'Mettre à jour' : 'Publier le bien'}</>}
               </Button>
             )}
           </div>
         </CardContent>
-      </Card>
     </div>
   )
 }

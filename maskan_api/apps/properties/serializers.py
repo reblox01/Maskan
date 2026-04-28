@@ -253,8 +253,15 @@ class PropertyCreateUpdateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         images_data = validated_data.pop("images", [])
-        validated_data["verification_status"] = Property.VerificationStatus.PENDING
-        validated_data["is_published"] = False
+        # Check if the user is an admin to bypass verification
+        user = self.context['request'].user
+        if user.role == 'admin':
+            validated_data["verification_status"] = Property.VerificationStatus.APPROVED
+            validated_data["is_published"] = True
+            validated_data["is_verified"] = True
+        else:
+            validated_data["verification_status"] = Property.VerificationStatus.PENDING
+            validated_data["is_published"] = False
         property_obj = Property.objects.create(**validated_data)
 
         for img_data in images_data:

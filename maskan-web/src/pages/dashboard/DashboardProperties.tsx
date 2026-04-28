@@ -181,28 +181,28 @@ export default function DashboardProperties() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <Link to={`/properties/${property.id}`}>
-                          <Button variant="ghost" size="sm" className="cursor-pointer" title="Voir">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        </Link>
-                        {property.verification_status !== 'approved' && (
-                          <Button variant="ghost" size="sm" className="cursor-pointer" title="Modifier">
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 cursor-pointer"
-                          onClick={() => handleDelete(property.id)}
-                          disabled={deleting === property.id}
-                          title="Supprimer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+<div className="flex items-center gap-1 flex-shrink-0">
+  <Link to={`/properties/${property.id}`}>
+    <Button variant="ghost" size="sm" className="cursor-pointer" title="Voir">
+      <Eye className="w-4 h-4" />
+    </Button>
+  </Link>
+<Link to={`/dashboard/add-property?edit=${property.id}`}>
+  <Button variant="ghost" size="sm" className="cursor-pointer" title="Modifier">
+    <Edit className="w-4 h-4" />
+  </Button>
+</Link>
+  <Button
+    variant="ghost"
+    size="sm"
+    className="text-red-600 hover:text-red-700 hover:bg-red-50 cursor-pointer"
+    onClick={() => handleDelete(property.id)}
+    disabled={deleting === property.id}
+    title="Supprimer"
+  >
+    <Trash2 className="w-4 h-4" />
+  </Button>
+</div>
                     </div>
                   </CardContent>
                 </Card>

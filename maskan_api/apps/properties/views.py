@@ -1,4 +1,5 @@
 import django.utils.timezone as tz
+import uuid
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework import viewsets, permissions, filters, status
@@ -61,6 +62,9 @@ class PropertyViewSet(viewsets.ModelViewSet):
             qs = qs.prefetch_related("images")
         if self.action == "list":
             qs = qs.filter(verification_status="approved")
+        if self.action in ("update", "partial_update") and self.request.user.is_authenticated:
+            # For update actions, allow owners to access all their properties
+            qs = qs.filter(agent=self.request.user)
         if self.action == "my_properties" and self.request.user.is_authenticated:
             qs = qs.filter(agent=self.request.user)
         return qs
@@ -232,29 +236,46 @@ class PropertyPendingVerificationView(APIView):
         if request.user.role != "admin":
             return Response({"error": "Réservé aux administrateurs."}, status=status.HTTP_403_FORBIDDEN)
 
-        status_filter = request.query_params.get("status", "pending")
-        if status_filter not in ["pending", "approved", "rejected", "all"]:
-            status_filter = "pending"
+        try:
+            status_filter = request.query_params.get("status", "pending")
+            if status_filter not in ["pending", "approved", "rejected", "all"]:
+                status_filter = "pending"
 
-        qs = Property.objects.select_related("agent", "reviewed_by")
-        if status_filter != "all":
-            qs = qs.filter(verification_status=status_filter)
+            qs = Property.objects.select_related("agent", "reviewed_by")
+            if status_filter != "all":
+                qs = qs.filter(verification_status=status_filter)
+                
+            # Log the query for debugging
+            print(f"Property query: status_filter={status_filter}, count={qs.count()}")
+            
+            page = int(request.query_params.get("page", 1))
+            page_size = min(int(request.query_params.get("page_size", 20)), 100)  # Cap at 100
+            start = (page - 1) * page_size
+            end = start + page_size
 
-        page = int(request.query_params.get("page", 1))
-        page_size = int(request.query_params.get("page_size", 20))
-        start = (page - 1) * page_size
-        end = start + page_size
+            # Fix pagination issue - ensure we're not going beyond available records
+            total = qs.count()
+            if total > 0:
+                # Adjust end to not exceed total
+                end = min(end, total)
+                start = min(start, total)
+                properties = qs[start:end] if total > 0 else []
+            else:
+                properties = []
 
-        total = qs.count()
-        properties = qs[start:end]
-
-        serializer = PropertyAdminListSerializer(properties, many=True)
-        return Response({
-            "count": total,
-            "results": serializer.data,
-            "page": page,
-            "page_size": page_size,
-        })
+            serializer = PropertyAdminListSerializer(properties, many=True)
+            return Response({
+                "count": total,
+                "results": serializer.data,
+                "page": page,
+                "page_size": page_size,
+            })
+        except Exception as e:
+            return Response({"error": f"Erreur lors de la récupération des biens: {str(e)}"}, 
+                           status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({"error": f"Erreur lors de la récupération des biens: {str(e)}"}, 
+                           status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class PropertyVerifyView(APIView):
@@ -266,10 +287,23 @@ class PropertyVerifyView(APIView):
         if request.user.role != "admin":
             return Response({"error": "Réservé aux administrateurs."}, status=status.HTTP_403_FORBIDDEN)
 
+        # Validate that pk is a valid UUID
         try:
-            property_obj = Property.objects.select_related("agent", "reviewed_by").get(pk=pk)
+            property_uuid = uuid.UUID(str(pk))
+            print(f"Valid UUID received: {property_uuid}")
+        except ValueError:
+            return Response({"error": "ID de bien invalide."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Check if property exists
+            property_obj = Property.objects.select_related("agent", "reviewed_by").get(pk=property_uuid)
+            print(f"Property found: {property_obj.id}")
         except Property.DoesNotExist:
+            print(f"Property with ID {pk} not found in database")
             return Response({"error": "Bien non trouvé."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(f"Error retrieving property {pk}: {str(e)}")
+            return Response({"error": f"Erreur lors de la récupération du bien: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         serializer = PropertyAdminDetailSerializer(property_obj)
         return Response(serializer.data)
@@ -278,10 +312,18 @@ class PropertyVerifyView(APIView):
         if request.user.role != "admin":
             return Response({"error": "Réservé aux administrateurs."}, status=status.HTTP_403_FORBIDDEN)
 
+        # Validate that pk is a valid UUID
+        try:
+            uuid.UUID(str(pk))
+        except ValueError:
+            return Response({"error": "ID invalide"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             property_obj = Property.objects.get(pk=pk)
         except Property.DoesNotExist:
             return Response({"error": "Bien non trouvé."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception:
+            return Response({"error": "Erreur lors de la récupération du bien."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         serializer = PropertyVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

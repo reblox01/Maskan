@@ -39,8 +39,10 @@ export default function PropertyVerification() {
       const params = new URLSearchParams()
       if (statusFilter !== 'all') params.set('status', statusFilter)
       const response = await api.get(`/properties/pending-verification/?${params}`)
+      console.log('Properties response:', response.data)
       setProperties(response.data.results || [])
-    } catch {
+    } catch (error) {
+      console.error('Error fetching properties:', error)
       setProperties([])
     } finally {
       setLoading(false)
@@ -53,10 +55,21 @@ export default function PropertyVerification() {
     setRejectReason('')
     setDialogOpen(true)
     try {
+      console.log('Fetching property details for ID:', id)
       const response = await api.get(`/properties/${id}/verify/`)
+      console.log('Property details response:', response.data)
       setSelectedProperty(response.data)
-    } catch {
-      toast({ title: 'Erreur', description: 'Impossible de charger les détails', variant: 'destructive' })
+    } catch (error: any) {
+      console.error('Error fetching property details:', error)
+      if (error.response?.status === 404) {
+        toast({ title: 'Erreur', description: 'Bien non trouvé', variant: 'destructive' })
+      } else if (error.response?.status === 403) {
+        toast({ title: 'Erreur', description: 'Accès refusé', variant: 'destructive' })
+      } else if (error.response?.status === 400) {
+        toast({ title: 'Erreur', description: 'Requête invalide', variant: 'destructive' })
+      } else {
+        toast({ title: 'Erreur', description: 'Impossible de charger les détails', variant: 'destructive' })
+      }
       setDialogOpen(false)
     } finally {
       setDetailLoading(false)
