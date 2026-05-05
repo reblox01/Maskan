@@ -80,10 +80,12 @@ export default function LocationPicker({ latitude, longitude, onLocationChange, 
   }, [latitude, longitude])
 
   const handlePick = async (lat: number, lng: number) => {
-    setCenter([lat, lng])
-    onLocationChange(lat, lng)
+    const roundedLat = Math.round(lat * 1e6) / 1e6
+    const roundedLng = Math.round(lng * 1e6) / 1e6
+    setCenter([roundedLat, roundedLng])
+    onLocationChange(roundedLat, roundedLng)
     if (onLocationDetails) {
-      const result = await reverseGeocode(lat, lng)
+      const result = await reverseGeocode(roundedLat, roundedLng)
       if (result) {
         onLocationDetails(result.city, result.region, result.address)
       }
@@ -98,8 +100,8 @@ export default function LocationPicker({ latitude, longitude, onLocationChange, 
     setGettingLocation(true)
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        const lat = position.coords.latitude
-        const lng = position.coords.longitude
+        const lat = Math.round(position.coords.latitude * 1e6) / 1e6
+        const lng = Math.round(position.coords.longitude * 1e6) / 1e6
         setCenter([lat, lng])
         onLocationChange(lat, lng)
         if (onLocationDetails) {

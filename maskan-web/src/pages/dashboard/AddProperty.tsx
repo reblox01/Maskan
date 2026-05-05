@@ -43,6 +43,7 @@ export default function AddProperty() {
   const [error, setError] = useState('')
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [stepErrors, setStepErrors] = useState<Record<string, string>>({})
 
   const [form, setForm] = useState({
     title: '',
@@ -105,13 +106,66 @@ export default function AddProperty() {
 
   const update = (field: string, value: string | number | null) => {
     setForm(prev => ({ ...prev, [field]: value }))
+    // Clear error for this field when user types
+    if (stepErrors[field]) {
+      setStepErrors(prev => {
+        const next = { ...prev }
+        delete next[field]
+        return next
+      })
+    }
+  }
+
+  const validateStep = (stepNum: number): boolean => {
+    const errors: Record<string, string> = {}
+
+    if (stepNum === 1) {
+      if (!form.property_type) errors.property_type = 'Veuillez sélectionner un type de bien'
+      if (!form.title || form.title.trim().length < 5) errors.title = 'Le titre doit contenir au moins 5 caractères'
+    }
+    if (stepNum === 2) {
+      if (!form.city || !form.city.trim()) errors.city = 'La ville est requise'
+      if (!form.region || !form.region.trim()) errors.region = 'La région est requise'
+    }
+    if (stepNum === 3) {
+      if (!form.price || Number(form.price) <= 0) errors.price = 'Le prix doit être supérieur à 0'
+      if (!form.area_sqm || Number(form.area_sqm) <= 0) errors.area_sqm = 'La surface doit être supérieure à 0 m²'
+    }
+
+    setStepErrors(errors)
+    return Object.keys(errors).length === 0
   }
 
   const canProceed = () => {
-    if (step === 1) return form.title.length >= 5 && form.property_type
-    if (step === 2) return form.city && form.region
+    if (step === 1) return form.title.trim().length >= 5 && !!form.property_type
+    if (step === 2) return !!form.city?.trim() && !!form.region?.trim()
     if (step === 3) return Number(form.price) > 0 && Number(form.area_sqm) > 0
     return true
+  }
+
+  const goToStep = (targetStep: number) => {
+    // Going backwards is always allowed
+    if (targetStep < step) {
+      setStepErrors({})
+      setStep(targetStep)
+      return
+    }
+    // Going forward: validate every step in between
+    for (let s = step; s < targetStep; s++) {
+      if (!validateStep(s)) {
+        setStep(s)
+        return
+      }
+    }
+    setStepErrors({})
+    setStep(targetStep)
+  }
+
+  const goNext = () => {
+    if (validateStep(step)) {
+      setStepErrors({})
+      setStep(step + 1)
+    }
   }
 
   const handleSubmit = async () => {
@@ -135,6 +189,8 @@ export default function AddProperty() {
 
       const data = {
         ...form,
+        latitude: form.latitude !== null ? Math.round(form.latitude * 1e6) / 1e6 : null,
+        longitude: form.longitude !== null ? Math.round(form.longitude * 1e6) / 1e6 : null,
         images: imageObjects
       }
 
@@ -171,15 +227,19 @@ export default function AddProperty() {
       <div className="flex items-center gap-1.5">
         {steps.map((s, i) => (
           <div key={s.id} className="flex items-center flex-1">
-            <div className={cn(
-              "flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors",
-              step === s.id ? "bg-teal-700 text-white" :
-              step > s.id ? "bg-teal-50 text-teal-700" :
-              "bg-slate-100 text-slate-400"
-            )}>
+            <button
+              type="button"
+              onClick={() => goToStep(s.id)}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer",
+                step === s.id ? "bg-teal-700 text-white" :
+                step > s.id ? "bg-teal-50 text-teal-700 hover:bg-teal-100" :
+                "bg-slate-100 text-slate-400"
+              )}
+            >
               {step > s.id ? <Check className="w-3.5 h-3.5" /> : <s.icon className="w-3.5 h-3.5" />}
               <span className="hidden sm:inline">{s.title}</span>
-            </div>
+            </button>
             {i < steps.length - 1 && <div className={cn("flex-1 h-px mx-0.5", step > s.id ? "bg-teal-300" : "bg-slate-200")} />}
           </div>
         ))}
@@ -210,9 +270,13 @@ export default function AddProperty() {
               </div>
               <div>
                 <Label className="mb-1.5 flex items-center gap-2"><FileText className="w-4 h-4 text-slate-400" />Titre du bien</Label>
-                <Input value={form.title} onChange={(e) => update('title', e.target.value)} placeholder="Ex: Appartement F3 avec vue sur mer" maxLength={200} />
-                <p className="text-xs text-slate-400 mt-1">{form.title.length}/200 caractères</p>
+                <Input value={form.title} onChange={(e) => update('title', e.target.value)} placeholder="Ex: Appartement F3 avec vue sur mer" maxLength={200} className={stepErrors.title ? 'border-red-400 focus-visible:ring-red-400' : ''} />
+                <div className="flex items-center justify-between mt-1">
+                  {stepErrors.title ? <p className="text-xs text-red-500">{stepErrors.title}</p> : <span />}
+                  <p className="text-xs text-slate-400">{form.title.length}/200 caractères</p>
+                </div>
               </div>
+              {stepErrors.property_type && <p className="text-xs text-red-500 -mt-2">{stepErrors.property_type}</p>}
             </motion.div>
           )}
 
@@ -222,11 +286,13 @@ export default function AddProperty() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label className="mb-1.5 flex items-center gap-2"><MapPin className="w-4 h-4 text-slate-400" />Ville</Label>
-                  <Input value={form.city} onChange={(e) => update('city', e.target.value)} placeholder="Casablanca" />
+                  <Input value={form.city} onChange={(e) => update('city', e.target.value)} placeholder="Casablanca" className={stepErrors.city ? 'border-red-400 focus-visible:ring-red-400' : ''} />
+                  {stepErrors.city && <p className="text-xs text-red-500 mt-1">{stepErrors.city}</p>}
                 </div>
                 <div>
                   <Label className="mb-1.5 flex items-center gap-2"><Map className="w-4 h-4 text-slate-400" />Région</Label>
-                  <Input value={form.region} onChange={(e) => update('region', e.target.value)} placeholder="Casablanca-Settat" />
+                  <Input value={form.region} onChange={(e) => update('region', e.target.value)} placeholder="Casablanca-Settat" className={stepErrors.region ? 'border-red-400 focus-visible:ring-red-400' : ''} />
+                  {stepErrors.region && <p className="text-xs text-red-500 mt-1">{stepErrors.region}</p>}
                 </div>
               </div>
               <div>
@@ -259,11 +325,13 @@ export default function AddProperty() {
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
               <div>
                 <Label className="mb-1.5 flex items-center gap-2"><DollarSign className="w-4 h-4 text-slate-400" />Prix (DH)</Label>
-                <Input value={form.price} onChange={(e) => update('price', e.target.value)} placeholder="1 800 000" type="number" min="0" />
+                <Input value={form.price} onChange={(e) => update('price', e.target.value)} placeholder="1 800 000" type="number" min="0" className={stepErrors.price ? 'border-red-400 focus-visible:ring-red-400' : ''} />
+                {stepErrors.price && <p className="text-xs text-red-500 mt-1">{stepErrors.price}</p>}
               </div>
               <div>
                 <Label className="mb-1.5 flex items-center gap-2"><Ruler className="w-4 h-4 text-slate-400" />Surface (m²)</Label>
-                <Input value={form.area_sqm} onChange={(e) => update('area_sqm', e.target.value)} placeholder="120" type="number" min="1" />
+                <Input value={form.area_sqm} onChange={(e) => update('area_sqm', e.target.value)} placeholder="120" type="number" min="1" className={stepErrors.area_sqm ? 'border-red-400 focus-visible:ring-red-400' : ''} />
+                {stepErrors.area_sqm && <p className="text-xs text-red-500 mt-1">{stepErrors.area_sqm}</p>}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -322,11 +390,11 @@ export default function AddProperty() {
           <Separator className="my-6" />
 
           <div className="flex items-center justify-between">
-            <Button variant="outline" onClick={() => setStep(step - 1)} disabled={step === 1} className="cursor-pointer">
+            <Button variant="outline" onClick={() => goToStep(step - 1)} disabled={step === 1} className="cursor-pointer">
               <ArrowLeft className="w-4 h-4 mr-2" />Précédent
             </Button>
             {step < 5 ? (
-              <Button onClick={() => setStep(step + 1)} disabled={!canProceed()} className="bg-teal-700 hover:bg-teal-800 cursor-pointer">
+              <Button onClick={goNext} className="bg-teal-700 hover:bg-teal-800 cursor-pointer">
                 Suivant<ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             ) : (
