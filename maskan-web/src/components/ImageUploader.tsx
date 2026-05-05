@@ -17,15 +17,34 @@ export default function ImageUploader({ images, onChange, maxImages = 10, maxSiz
 
   const processFile = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
-      if (file.size > maxSizeMB * 1024 * 1024) {
-        reject(new Error(`${file.name} dépasse ${maxSizeMB}MB`))
-        return
-      }
       const reader = new FileReader()
-      reader.onload = () => {
-        const result = reader.result as string
-        const base64 = result.includes(',') ? result.split(',')[1] : result
-        resolve(base64)
+      reader.onload = (e) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+          const maxDim = 1600
+
+          if (width > height && width > maxDim) {
+            height = (height * maxDim) / width
+            width = maxDim
+          } else if (height > maxDim) {
+            width = (width * maxDim) / height
+            height = maxDim
+          }
+
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          ctx?.drawImage(img, 0, 0, width, height)
+          
+          // Compress to JPEG with 0.8 quality
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
+          resolve(dataUrl)
+        }
+        img.onerror = () => reject(new Error(`Erreur de chargement: ${file.name}`))
+        img.src = e.target?.result as string
       }
       reader.onerror = () => reject(new Error(`Erreur de lecture: ${file.name}`))
       reader.readAsDataURL(file)
@@ -107,15 +126,46 @@ export default function ImageUploader({ images, onChange, maxImages = 10, maxSiz
           <AnimatePresence>
             {images.map((img, index) => (
               <motion.div
-                key={`${img.substring(0, 20)}-${index}`}
+                key={`${(img || '').substring(0, 20)}-${index}`}
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ duration: 0.2 }}
                 className="relative group aspect-[4/3] rounded-lg overflow-hidden border border-slate-200"
               >
-                <img src={`data:image/jpeg;base64,${img}`} alt={`Photo ${index + 1}`} className="w-full h-full object-cover" />
-                <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-black/60 text-white text-xs font-bold flex items-center justify-center">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="absolute inset-0 bg-black/10 backdrop-blur-[2px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <div className="bg-white/90 rounded-full p-2 scale-90 group-hover:scale-100 transition-transform">
+                    <Upload className="w-4 h-4 text-teal-600" />
+                  </div>
+                </motion.div>
+                
+                {/* Shimmer effect for new images (base64) */}
+                {img?.startsWith('data:') && (
+                  <motion.div 
+                    initial={{ x: '-100%' }}
+                    animate={{ x: '100%' }}
+                    transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent z-10 pointer-events-none"
+                  />
+                )}
+
+                <img 
+                  src={img?.startsWith('http') || img?.startsWith('/') || img?.startsWith('blob:') || img?.startsWith('data:') ? img : `data:image/jpeg;base64,${img}`} 
+                  alt={`Photo ${index + 1}`} 
+                  className={cn(
+                    "w-full h-full object-cover transition-all duration-500",
+                    img?.startsWith('data:') ? "blur-sm animate-pulse" : "blur-0"
+                  )}
+                  onLoad={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.classList.remove('blur-sm', 'animate-pulse');
+                  }}
+                />
+                <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-black/60 text-white text-xs font-bold flex items-center justify-center z-20">
                   {index + 1}
                 </div>
                 <button

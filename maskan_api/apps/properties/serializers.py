@@ -80,19 +80,37 @@ class PropertyImageSerializer(serializers.ModelSerializer):
         return value
 
 
+class PropertyImageMetaSerializer(serializers.ModelSerializer):
+    """Lightweight image serializer WITHOUT image_data (served via /image/{hash}/)."""
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PropertyImage
+        fields = ["id", "image_hash", "image_url", "order", "created_at"]
+        read_only_fields = ["id", "image_hash", "created_at"]
+
+    def get_image_url(self, obj):
+        return f"/api/properties/image/{obj.image_hash}/"
+
+
 class PropertyImageCreateSerializer(serializers.Serializer):
-    image_data = serializers.CharField()
+    image_data = serializers.CharField(required=False, allow_null=True)
+    image_hash = serializers.CharField(required=False, allow_null=True)
     order = serializers.IntegerField(min_value=0, default=0)
 
-    def validate_image_data(self, value):
-        _validate_base64_image(value)
-        return value
+    def validate(self, data):
+        if not data.get("image_data") and not data.get("image_hash"):
+            raise serializers.ValidationError("Either image_data or image_hash must be provided.")
+        if data.get("image_data"):
+            _validate_base64_image(data["image_data"])
+        return data
 
 
 class PropertyListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for property lists (no image data)."""
 
     main_image_hash = serializers.SerializerMethodField()
+    main_image_url = serializers.SerializerMethodField()
     agent_name = serializers.CharField(source="agent.username", read_only=True)
     verification_status = serializers.CharField(read_only=True)
 
@@ -101,7 +119,7 @@ class PropertyListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "title", "property_type", "status", "price", "currency",
             "area_sqm", "bedrooms", "bathrooms", "city", "region",
-            "latitude", "longitude", "is_featured", "main_image_hash",
+            "latitude", "longitude", "is_featured", "main_image_hash", "main_image_url",
             "agent_name", "verification_status", "created_at",
         ]
 
@@ -109,11 +127,20 @@ class PropertyListSerializer(serializers.ModelSerializer):
         main_img = obj.main_image
         return main_img.image_hash if main_img else None
 
+    def get_main_image_url(self, obj):
+        # Use prefetched images list to avoid N+1 queries
+        images = list(obj.images.all())
+        if images:
+            first_img = images[0]
+            if first_img.image_hash:
+                return f"/api/properties/image/{first_img.image_hash}/"
+        return None
+
 
 class PropertyDetailSerializer(serializers.ModelSerializer):
     """Full property detail with images and verification info."""
 
-    images = PropertyImageSerializer(many=True, read_only=True)
+    images = PropertyImageMetaSerializer(many=True, read_only=True)
     agent = serializers.SerializerMethodField()
     verification_status = serializers.CharField(read_only=True)
     is_verified = serializers.BooleanField(read_only=True)
@@ -138,7 +165,7 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
             "name": obj.agent.first_name + " " + obj.agent.last_name if obj.agent.first_name else obj.agent.username,
             "email": obj.agent.email,
             "phone": getattr(obj.agent, "phone", None),
-            "profile_image": getattr(obj.agent, "profile_image", None),
+            "profile_image": getattr(obj.agent, "avatar", None),
         }
 
 
@@ -251,10 +278,82 @@ class PropertyCreateUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(f"Maximum {MAX_IMAGES_PER_PROPERTY} images autorisées.")
         return value
 
+    def _process_images(self, property_obj, images_data):
+        from .debug_logger import log_debug
+        log_debug(f"Starting _process_images for property {property_obj.id}")
+        
+        if images_data is None:
+            log_debug("images_data is None, returning")
+            return
+
+        from .models import PropertyImage
+        
+        # 1. Get existing images metadata in one query
+        log_debug("Fetching existing images metadata")
+        existing_images = property_obj.images.all().only("id", "image_hash", "order")
+        existing_map = {img.image_hash: img for img in existing_images}
+        log_debug(f"Found {len(existing_map)} existing images in DB")
+        
+        new_image_instances_ids = []
+        to_create = []
+        to_update = []
+        
+        for i, img_data in enumerate(images_data):
+            log_debug(f"Processing image {i+1}/{len(images_data)}")
+            image_hash = img_data.get("image_hash")
+            image_data_str = img_data.get("image_data")
+            order = img_data.get("order", 0)
+
+            if image_hash and image_hash in existing_map:
+                log_debug(f"Found existing hash match: {image_hash[:10]}...")
+                img_instance = existing_map[image_hash]
+                if img_instance.order != order:
+                    img_instance.order = order
+                    to_update.append(img_instance)
+                new_image_instances_ids.append(img_instance.id)
+                
+            elif image_data_str:
+                log_debug("Processing new image data (base64)")
+                raw = image_data_str
+                if "," in raw:
+                    raw = raw.split(",", 1)[1]
+                
+                log_debug(f"Hashing new image (len: {len(raw)})")
+                new_hash = hashlib.sha256(raw.encode()).hexdigest()
+                log_debug(f"New hash: {new_hash[:10]}...")
+                
+                if new_hash in existing_map:
+                    log_debug("New image matches an existing hash!")
+                    img_instance = existing_map[new_hash]
+                    img_instance.order = order
+                    to_update.append(img_instance)
+                    new_image_instances_ids.append(img_instance.id)
+                else:
+                    log_debug("Staging new image for creation")
+                    to_create.append(PropertyImage(
+                        property=property_obj,
+                        image_data=raw,
+                        image_hash=new_hash,
+                        order=order
+                    ))
+
+        # 2. Perform DB operations in bulk
+        if to_update:
+            PropertyImage.objects.bulk_update(to_update, ["order"])
+        
+        if to_create:
+            created_imgs = PropertyImage.objects.bulk_create(to_create)
+            new_image_instances_ids.extend([img.id for img in created_imgs])
+
+        # 3. Efficiently delete stale images
+        log_debug(f"Deleting stale images. New instances: {len(new_image_instances_ids)}")
+        property_obj.images.exclude(id__in=new_image_instances_ids).delete()
+        log_debug("_process_images completed")
+
     def create(self, validated_data):
         images_data = validated_data.pop("images", [])
-        # Check if the user is an admin to bypass verification
         user = self.context['request'].user
+        
         if user.role == 'admin':
             validated_data["verification_status"] = Property.VerificationStatus.APPROVED
             validated_data["is_published"] = True
@@ -262,43 +361,47 @@ class PropertyCreateUpdateSerializer(serializers.ModelSerializer):
         else:
             validated_data["verification_status"] = Property.VerificationStatus.PENDING
             validated_data["is_published"] = False
+            
         property_obj = Property.objects.create(**validated_data)
+        self._process_images(property_obj, images_data)
 
-        for img_data in images_data:
-            raw = img_data["image_data"]
-            if "," in raw and raw.startswith("data:"):
-                raw = raw.split(",", 1)[1]
-
-            PropertyImage.objects.create(
-                property=property_obj,
-                image_data=raw,
-                image_hash=hashlib.sha256(raw.encode()).hexdigest(),
-                order=img_data.get("order", 0),
-            )
+        # Invalidate cache
+        try:
+            from .cache import invalidate_property_list_cache
+            invalidate_property_list_cache()
+        except Exception:
+            pass
 
         return property_obj
 
     def update(self, instance, validated_data):
+        from .debug_logger import log_debug
+        log_debug(f"Starting update for property {instance.id}")
+        
         images_data = validated_data.pop("images", None)
 
+        log_debug("Saving instance fields")
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
         if images_data is not None:
-            instance.images.all().delete()
-            for img_data in images_data:
-                raw = img_data["image_data"]
-                if "," in raw and raw.startswith("data:"):
-                    raw = raw.split(",", 1)[1]
+            log_debug(f"Syncing {len(images_data)} images")
+            self._process_images(instance, images_data)
+        else:
+            log_debug("No images_data to sync")
 
-                PropertyImage.objects.create(
-                    property=instance,
-                    image_data=raw,
-                    image_hash=hashlib.sha256(raw.encode()).hexdigest(),
-                    order=img_data.get("order", 0),
-                )
+        # Invalidate cache
+        log_debug("Invalidating cache")
+        try:
+            from .cache import invalidate_property_cache, invalidate_property_list_cache
+            invalidate_property_cache(str(instance.id))
+            invalidate_property_list_cache()
+            log_debug("Cache invalidated successfully")
+        except Exception as e:
+            log_debug(f"Cache invalidation failed: {str(e)}")
 
+        log_debug("Update completed successfully")
         return instance
 
 
@@ -330,7 +433,7 @@ class PropertyAdminListSerializer(serializers.ModelSerializer):
 class PropertyAdminDetailSerializer(serializers.ModelSerializer):
     """Full property detail for admin with all verification fields."""
 
-    images = PropertyImageSerializer(many=True, read_only=True)
+    images = PropertyImageMetaSerializer(many=True, read_only=True)
     agent = serializers.SerializerMethodField()
     reviewed_by = serializers.SerializerMethodField()
 

@@ -275,7 +275,7 @@ export default function PropertyVerification() {
                       {selectedProperty.images.slice(0, 4).map((img) => (
                         <div key={img.id} className="aspect-square rounded-lg bg-slate-100 overflow-hidden">
                           <img
-                            src={`data:image/jpeg;base64,${img.image_data}`}
+                            src={img.image_url}
                             alt=""
                             className="w-full h-full object-cover"
                           />

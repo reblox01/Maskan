@@ -47,9 +47,7 @@ interface MapPropertyPopupProps {
 }
 
 export default function MapPropertyPopup({ pin }: MapPropertyPopupProps) {
-  const imageUrl = pin.image_data
-    ? `data:image/jpeg;base64,${pin.image_data}`
-    : placeholderImages[pin.property_type] || placeholderImages.apartment
+  const imageUrl = pin.main_image_url || placeholderImages[pin.property_type] || placeholderImages.apartment
 
   const typeLabel = typeLabels[pin.property_type] || pin.property_type
   const statusColor = statusColors[pin.status] || statusColors.available

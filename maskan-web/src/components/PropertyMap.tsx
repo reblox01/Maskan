@@ -70,7 +70,7 @@ function MapPinMarker({
   isActive,
   onClick,
 }: {
-  pin: MapPin & { area_sqm?: number; bedrooms?: number; bathrooms?: number; image_data?: string }
+  pin: MapPin
   isActive: boolean
   onClick: () => void
 }) {
@@ -187,7 +187,7 @@ export default function PropertyMap({
             return (
               <MapPinMarker
                 key={pin.id}
-                pin={pin as MapPin & { area_sqm?: number; bedrooms?: number; bathrooms?: number; image_data?: string }}
+                pin={pin}
                 isActive={activePinId === pin.id}
                 onClick={() => setActivePinId(pin.id)}
               />

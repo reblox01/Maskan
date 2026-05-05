@@ -1,3 +1,4 @@
+from datetime import timezone
 import uuid
 import hashlib
 from django.conf import settings
@@ -159,7 +160,12 @@ class Property(models.Model):
 
     @property
     def main_image(self):
-        return self.images.order_by("order").first()
+        """Returns the first image by order or creation."""
+        # Use prefetched images if available to avoid N+1 queries
+        if hasattr(self, "_prefetched_objects_cache") and "images" in self._prefetched_objects_cache:
+            images = list(self.images.all())
+            return images[0] if images else None
+        return self.images.defer("image_data").order_by("order", "created_at").first()
 
 
 class PropertyImage(models.Model):

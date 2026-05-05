@@ -95,9 +95,10 @@ export default function AddProperty() {
       })
       // Load images if they exist
       if (property.images && property.images.length > 0) {
-        setImages(property.images.map((img: any) => img.image_data))
+        // Use image_url for existing images, fallback to image_data
+        setImages(property.images.map((img: any) => img.image_url || img.image_data))
       }
-      console.log('Images loaded:', property.images)
+      console.log('Images loaded into state:', property.images.length)
     } catch (err) {
       console.error('Error loading property:', err)
       toast({ title: 'Erreur', description: 'Impossible de charger le bien', variant: 'destructive' })
@@ -181,11 +182,22 @@ export default function AddProperty() {
         }
       })
 
-      // Handle images
-      const imageObjects = images.map((imageData, index) => ({
-        image_data: imageData,
-        order: index
-      }))
+      // Handle images: extract hash for existing ones, send data for new ones
+      const imageObjects = images.map((img, index) => {
+        // If it's a URL to our image endpoint, extract the hash
+        const hashMatch = img.match(/\/image\/([a-f0-9]{64})\//)
+        if (hashMatch) {
+          return {
+            image_hash: hashMatch[1],
+            order: index
+          }
+        }
+        // Otherwise assume it's new base64 data
+        return {
+          image_data: img,
+          order: index
+        }
+      })
 
       const data = {
         ...form,

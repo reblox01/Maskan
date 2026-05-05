@@ -6,6 +6,7 @@ from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
 
 from apps.accounts.permissions import IsVendeur, IsOwner
@@ -57,16 +58,24 @@ class PropertyViewSet(viewsets.ModelViewSet):
     lookup_field = "id"
 
     def get_queryset(self):
-        qs = Property.objects.select_related("agent")
-        if self.action in ("retrieve",):
-            qs = qs.prefetch_related("images")
+        from django.db.models import Prefetch
+        from .models import PropertyImage
+
+        # Prefetch images but defer the massive image_data blob
+        image_prefetch = Prefetch(
+            "images",
+            queryset=PropertyImage.objects.defer("image_data").order_by("order", "created_at")
+        )
+        
+        qs = Property.objects.select_related("agent").prefetch_related(image_prefetch).defer("agent__avatar")
+        
         if self.action == "list":
             qs = qs.filter(verification_status="approved")
-        if self.action in ("update", "partial_update") and self.request.user.is_authenticated:
-            # For update actions, allow owners to access all their properties
+        elif self.action in ("update", "partial_update") and self.request.user.is_authenticated:
             qs = qs.filter(agent=self.request.user)
-        if self.action == "my_properties" and self.request.user.is_authenticated:
+        elif self.action == "my_properties" and self.request.user.is_authenticated:
             qs = qs.filter(agent=self.request.user)
+            
         return qs
 
     def get_serializer_class(self):
@@ -217,12 +226,8 @@ class PropertyViewSet(viewsets.ModelViewSet):
                 longitude__isnull=False,
             )
         )
-        data = list(
-            qs.values(
-                "id", "title", "price", "currency", "property_type",
-                "city", "latitude", "longitude", "status",
-            )
-        )
+        serializer = PropertyListSerializer(qs, many=True, context=self.get_serializer_context())
+        data = serializer.data
         set_cached(cache_key, data, CACHE_TTL_MAP_PINS, "properties:map")
         return Response(data)
 
@@ -296,7 +301,15 @@ class PropertyVerifyView(APIView):
 
         try:
             # Check if property exists
-            property_obj = Property.objects.select_related("agent", "reviewed_by").get(pk=property_uuid)
+            from django.db.models import Prefetch
+            from .models import PropertyImage
+            
+            image_prefetch = Prefetch(
+                "images",
+                queryset=PropertyImage.objects.defer("image_data").order_by("order", "created_at")
+            )
+            
+            property_obj = Property.objects.select_related("agent", "reviewed_by").prefetch_related(image_prefetch).get(pk=property_uuid)
             print(f"Property found: {property_obj.id}")
         except Property.DoesNotExist:
             print(f"Property with ID {pk} not found in database")
@@ -460,3 +473,48 @@ class ConsultingRequestView(APIView):
             return Response(serializer.data)
         
         return Response({"error": "Statut invalide."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PropertyImageServeView(APIView):
+    """Serve property image binary by hash. Public endpoint with caching headers."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, image_hash):
+        from .models import PropertyImage
+        from .cache import get_cached, set_cached
+        import base64
+
+        # Try to get from cache first
+        cache_key = f"img_data:{image_hash}"
+        cached_b64 = get_cached(cache_key)
+        
+        if cached_b64:
+            binary = base64.b64decode(cached_b64)
+        else:
+            try:
+                img = PropertyImage.objects.only("image_data", "image_hash").filter(image_hash=image_hash).first()
+                if not img:
+                    return Response({"error": "Image non trouvée."}, status=status.HTTP_404_NOT_FOUND)
+                
+                raw_data = img.image_data
+                if "," in raw_data:
+                    raw_data = raw_data.split(",", 1)[1]
+                
+                # Cache the raw base64 string for 24h
+                set_cached(cache_key, raw_data, ttl=86400)
+                binary = base64.b64decode(raw_data)
+            except Exception:
+                return Response({"error": "Image corrompue."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Detect content type from first bytes
+        content_type = "image/jpeg"
+        if binary[:8] == b"\x89PNG\r\n\x1a\n":
+            content_type = "image/png"
+        elif binary[:4] == b"RIFF" and binary[8:12] == b"WEBP":
+            content_type = "image/webp"
+
+        response = HttpResponse(binary, content_type=content_type)
+        response["Cache-Control"] = "public, max-age=31536000, immutable"
+        response["ETag"] = f'"{image_hash}"'
+        return response

@@ -20,6 +20,7 @@ export interface Property {
   verification_status?: "pending" | "approved" | "rejected"
   rejection_reason?: string
   main_image_hash?: string
+  main_image_url?: string
   agent_name?: string
   agent?: {
     id: string
@@ -34,7 +35,8 @@ export interface Property {
 
 export interface PropertyImage {
   id: string
-  image_data: string
+  image_data?: string
+  image_url: string
   image_hash: string
   order: number
   created_at: string
@@ -104,6 +106,7 @@ export interface MapPin {
   bedrooms?: number
   bathrooms?: number
   area_sqm?: number
+  main_image_url?: string
 }
 
 export interface ApplicationField {

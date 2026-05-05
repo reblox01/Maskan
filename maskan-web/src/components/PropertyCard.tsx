@@ -42,8 +42,10 @@ function PropertyCard({ property, index = 0 }: PropertyCardProps) {
   const [isFavorited, setIsFavorited] = useState(false)
 
   const images = property.images?.length
-    ? property.images.map((img) => `data:image/jpeg;base64,${img.image_data}`)
-    : [placeholderImages[index % placeholderImages.length]]
+    ? property.images.map((img) => img.image_url)
+    : property.main_image_url 
+      ? [property.main_image_url]
+      : [placeholderImages[index % placeholderImages.length]]
 
   const status = statusConfig[property.status] || statusConfig.available
   const typeLabel = typeLabels[property.property_type] || property.property_type

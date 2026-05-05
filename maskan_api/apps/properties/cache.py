@@ -1,11 +1,12 @@
 import hashlib
 import json
+import threading
 from typing import Any, Optional
 
 from decouple import config
 from upstash_redis import Redis
 
-KEY_PREFIX = "maskan"
+KEY_PREFIX = "maskan_v2"
 
 _redis_client: Optional[Redis] = None
 
@@ -16,7 +17,8 @@ def get_redis_client() -> Redis:
         url = config("UPSTASH_REDIS_REST_URL", default="")
         token = config("UPSTASH_REDIS_REST_TOKEN", default="")
         if url and token:
-            _redis_client = Redis(url=url, token=token)
+            # Strict timeout to avoid hanging main thread
+            _redis_client = Redis(url=url, token=token, rest_timeout=3.0)
         else:
             raise RuntimeError(
                 "Redis not configured. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN"
@@ -55,8 +57,6 @@ CACHE_TTL_CITIES_REGIONS = config("CACHE_TTL_CITIES_REGIONS", default=3600, cast
 CACHE_TTL_MAP_PINS = config("CACHE_TTL_MAP_PINS", default=300, cast=int)
 CACHE_TTL_MY_PROPERTIES = config("CACHE_TTL_MY_PROPERTIES", default=300, cast=int)
 
-CACHE_KEYS_SET = "cache_keys"
-
 
 def get_property_list_cache_key(filters: dict, page: int = 1) -> str:
     filters_hash = _hash_filters(filters)
@@ -86,18 +86,27 @@ def get_my_properties_cache_key(user_id: str, filters: dict, page: int = 1) -> s
 
 
 def _track_cache_key(redis: Redis, key: str, category: str = "properties:list") -> None:
-    redis.sadd(f"cache_keys:{category}", key)
+    try:
+        redis.sadd(f"cache_keys:{category}", key)
+    except Exception:
+        pass
 
 
 def _get_cache_keys(redis: Redis, category: str) -> list[str]:
-    return list(redis.smembers(f"cache_keys:{category}"))
+    try:
+        return list(redis.smembers(f"cache_keys:{category}"))
+    except Exception:
+        return []
 
 
 def _delete_cache_keys(redis: Redis, category: str) -> None:
-    keys = _get_cache_keys(redis, category)
-    if keys:
-        redis.delete(*keys)
-    redis.delete(f"cache_keys:{category}")
+    try:
+        keys = _get_cache_keys(redis, category)
+        if keys:
+            redis.delete(*keys)
+        redis.delete(f"cache_keys:{category}")
+    except Exception:
+        pass
 
 
 def get_cached(key: str) -> Optional[Any]:
@@ -105,8 +114,6 @@ def get_cached(key: str) -> Optional[Any]:
         redis = get_redis_client()
         data = redis.get(key)
         return _deserialize(data)
-    except RuntimeError:
-        return None
     except Exception:
         return None
 
@@ -117,52 +124,55 @@ def set_cached(key: str, data: Any, ttl: int, category: str = "properties:list")
         redis.set(key, _serialize(data), ex=ttl)
         _track_cache_key(redis, key, category)
         return True
-    except RuntimeError:
-        return False
     except Exception:
         return False
+
+
+def invalidate_property_list_cache() -> None:
+    """Invalidate all property list related caches in a background thread."""
+    def _do_work():
+        try:
+            redis = get_redis_client()
+            categories = ["properties:list", "properties:featured", "properties:cities", "properties:regions", "properties:map", "properties:my"]
+            for cat in categories:
+                _delete_cache_keys(redis, cat)
+        except Exception:
+            pass
+            
+    threading.Thread(target=_do_work, daemon=True).start()
 
 
 def invalidate_property_cache(property_id: str) -> None:
-    try:
-        redis = get_redis_client()
-        redis.delete(f"{KEY_PREFIX}:properties:detail:{property_id}")
-    except RuntimeError:
-        pass
-    except Exception:
-        pass
+    """Invalidate specific property cache in a background thread."""
+    def _do_work():
+        try:
+            redis = get_redis_client()
+            redis.delete(f"{KEY_PREFIX}:properties:detail:{property_id}")
+            # Broad invalidation of lists as well
+            invalidate_property_list_cache()
+        except Exception:
+            pass
+
+    threading.Thread(target=_do_work, daemon=True).start()
 
 
 def invalidate_all_properties_cache() -> None:
-    try:
-        redis = get_redis_client()
-        _delete_cache_keys(redis, "properties:list")
-        _delete_cache_keys(redis, "properties:featured")
-        _delete_cache_keys(redis, "properties:cities")
-        _delete_cache_keys(redis, "properties:regions")
-        _delete_cache_keys(redis, "properties:map")
-        _delete_cache_keys(redis, "properties:my")
-    except RuntimeError:
-        pass
-    except Exception:
-        pass
+    """Alias for broad invalidation."""
+    invalidate_property_list_cache()
 
 
 def invalidate_my_properties_cache(user_id: str) -> None:
-    try:
-        redis = get_redis_client()
-        keys = _get_cache_keys(redis, "properties:my")
-        for key in keys:
-            if f":my:{user_id}:" in key:
-                redis.delete(key)
-        remaining = [k for k in keys if f":my:{user_id}:" not in k]
-        redis.delete(f"cache_keys:properties:my")
-        if remaining:
-            redis.sadd(f"cache_keys:properties:my", *remaining)
-    except RuntimeError:
-        pass
-    except Exception:
-        pass
+    def _do_work():
+        try:
+            redis = get_redis_client()
+            keys = _get_cache_keys(redis, "properties:my")
+            for key in keys:
+                if f":my:{user_id}:" in key:
+                    redis.delete(key)
+        except Exception:
+            pass
+            
+    threading.Thread(target=_do_work, daemon=True).start()
 
 
 def check_rate_limit(ip: str, limit: int, window: int = 60) -> tuple[bool, int]:
@@ -178,8 +188,6 @@ def check_rate_limit(ip: str, limit: int, window: int = 60) -> tuple[bool, int]:
             return False, 0
         redis.incr(key)
         return True, limit - count - 1
-    except RuntimeError:
-        return True, limit
     except Exception:
         return True, limit
 

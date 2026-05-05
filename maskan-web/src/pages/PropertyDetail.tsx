@@ -63,7 +63,7 @@ export default function PropertyDetail() {
   }
 
   const images = property.images?.length
-    ? property.images.map((img) => `data:image/jpeg;base64,${img.image_data}`)
+    ? property.images.map((img) => img.image_url)
     : placeholderImages
 
   const typeLabel = typeLabels[property.property_type] || property.property_type
