@@ -58,6 +58,7 @@ export default function AddProperty() {
     region: '',
     latitude: null as number | null,
     longitude: null as number | null,
+    is_featured: false,
   })
 
   const [images, setImages] = useState<string[]>([])
@@ -92,6 +93,7 @@ export default function AddProperty() {
         region: property.region || '',
         latitude: property.latitude,
         longitude: property.longitude,
+        is_featured: property.is_featured || false,
       })
       // Load images if they exist
       if (property.images && property.images.length > 0) {
@@ -105,7 +107,7 @@ export default function AddProperty() {
     }
   }
 
-  const update = (field: string, value: string | number | null) => {
+  const update = (field: string, value: string | number | null | boolean) => {
     setForm(prev => ({ ...prev, [field]: value }))
     // Clear error for this field when user types
     if (stepErrors[field]) {
@@ -289,6 +291,28 @@ export default function AddProperty() {
                 </div>
               </div>
               {stepErrors.property_type && <p className="text-xs text-red-500 -mt-2">{stepErrors.property_type}</p>}
+
+              <div className="flex items-center justify-between p-4 bg-teal-50/50 rounded-xl border border-teal-100">
+                <div className="space-y-0.5">
+                  <Label className="text-teal-900 font-semibold">Mettre en vedette</Label>
+                  <p className="text-xs text-teal-600">Afficher ce bien dans la section premium de l'accueil</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => update('is_featured', !form.is_featured)}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none",
+                    form.is_featured ? "bg-teal-600" : "bg-slate-200"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                      form.is_featured ? "translate-x-6" : "translate-x-1"
+                    )}
+                  />
+                </button>
+              </div>
             </motion.div>
           )}
 

@@ -149,7 +149,15 @@ class PropertyViewSet(viewsets.ModelViewSet):
         cached_data = get_cached(cache_key)
         if cached_data is not None:
             return Response(cached_data)
+        
+        # 1. Try to get properties explicitly marked as featured
         qs = self.get_queryset().filter(is_featured=True, verification_status="approved")[:12]
+        
+        # 2. Fallback to recent approved properties if no featured ones exist
+        # This prevents the home page from looking empty
+        if not qs.exists():
+            qs = self.get_queryset().filter(verification_status="approved")[:12]
+            
         serializer = PropertyListSerializer(qs, many=True, context=self.get_serializer_context())
         set_cached(cache_key, serializer.data, CACHE_TTL_FEATURED, "properties:featured")
         return Response(serializer.data)

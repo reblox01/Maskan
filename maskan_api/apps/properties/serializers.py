@@ -185,7 +185,7 @@ class PropertyCreateUpdateSerializer(serializers.ModelSerializer):
             "furnished", "is_turnkey", "deposit", "rent_price",
             "floor", "available_from", "charges_included",
             "consulting_enabled", "consulting_is_free", "consulting_price",
-            "is_published", "images",
+            "is_published", "is_featured", "images",
         ]
         read_only_fields = ["id"]
 
