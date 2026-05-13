@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { 
   Building2, Users, Clock, Plus, Heart, Search, 
-  TrendingUp, TrendingDown, Calendar 
+  TrendingUp, TrendingDown, Calendar, Home, MapPin
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { cn, formatPrice } from '@/lib/utils'
 
 interface DashboardStats {
   properties_count: number
@@ -57,7 +57,8 @@ export default function DashboardHome() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const currentMode = user?.current_mode || user?.role || 'acquereur'
+  const validModes = ['acquereur', 'vendeur', 'admin']
+  const currentMode = user?.current_mode && validModes.includes(user.current_mode) ? user.current_mode : user?.role || 'acquereur'
   const isAdmin = user?.role === 'admin'
 
   useEffect(() => {
@@ -248,6 +249,8 @@ export default function DashboardHome() {
         ))}
       </div>
 
+      {currentMode === 'acquereur' && <PurchasedProperties />}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="border-0 shadow-card">
           <CardContent className="p-5">
@@ -326,6 +329,69 @@ export default function DashboardHome() {
             </div>
           </CardContent>
         </Card>
+      </div>
+    </div>
+  )
+}
+
+function PurchasedProperties() {
+  const [properties, setProperties] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchSold()
+  }, [])
+
+  const fetchSold = async () => {
+    try {
+      const res = await api.get('/properties/sold/')
+      setProperties(res.data)
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) return null
+  if (properties.length === 0) return null
+
+  return (
+    <div className="space-y-3">
+      <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+        <Home className="w-5 h-5 text-teal-600" />
+        Biens achetés
+      </h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {properties.map((p: any, i: number) => (
+          <motion.div
+            key={p.id}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+          >
+            <Link to={`/properties/${p.id}`} className="block group cursor-pointer">
+              <Card className="border-0 shadow-card hover:shadow-card-hover transition-shadow overflow-hidden">
+                <div className="aspect-[16/9] bg-slate-100 relative overflow-hidden">
+                  <img
+                    src={p.main_image_url || 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&h=300&fit=crop'}
+                    alt={p.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <Badge className="absolute top-2 left-2 bg-teal-700 text-white border-0">Acheté</Badge>
+                </div>
+                <CardContent className="p-3">
+                  <h3 className="text-sm font-semibold text-slate-900 truncate">{p.title}</h3>
+                  <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
+                    <MapPin className="w-3 h-3" />
+                    {p.city}, {p.region}
+                  </div>
+                  <p className="text-sm font-bold text-teal-700 mt-1">{formatPrice(p.price)}</p>
+                </CardContent>
+              </Card>
+            </Link>
+          </motion.div>
+        ))}
       </div>
     </div>
   )

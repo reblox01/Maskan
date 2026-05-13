@@ -390,10 +390,10 @@ class DashboardStatsView(APIView):
                 "recent_properties": recent_list,
             })
 
-        from apps.properties.models import SavedProperty
+        from apps.favorites.models import Favorite
 
-        saved_count = SavedProperty.objects.filter(user=user).count()
-        saved_this_month = SavedProperty.objects.filter(user=user, created_at__gte=month_start).count()
+        saved_count = Favorite.objects.filter(user=user).count()
+        saved_this_month = Favorite.objects.filter(user=user, created_at__gte=month_start).count()
 
         return Response({
             "saved_count": saved_count,

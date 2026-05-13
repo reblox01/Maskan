@@ -13,6 +13,7 @@ const publicEndpoints = [
   '/properties/cities/',
   '/properties/regions/',
   '/properties/map-pins/',
+  '/favorites/',
 ]
 
 api.interceptors.request.use((config) => {
@@ -84,5 +85,57 @@ api.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+export const toggleFavorite = async (propertyId: string) => {
+  const res = await api.post(`/favorites/toggle/${propertyId}/`)
+  return res.data
+}
+
+export const getFavorites = async () => {
+  const res = await api.get('/favorites/list/')
+  return res.data
+}
+
+export const createVisitRequest = async (propertyId: string, data: { scheduled_date: string; notes?: string }) => {
+  const res = await api.post(`/properties/request-visit/${propertyId}/`, data)
+  return res.data
+}
+
+export const getMyVisitRequests = async () => {
+  const res = await api.get('/properties/my-visit-requests/')
+  return res.data
+}
+
+export const updateVisitStatus = async (id: string, status: string) => {
+  const res = await api.patch('/properties/my-visit-requests/', { id, status })
+  return res.data
+}
+
+export const getBookedDates = async (propertyId: string) => {
+  const res = await api.get(`/properties/${propertyId}/booked-dates/`)
+  return res.data
+}
+
+export const getContracts = async () => {
+  const res = await api.get('/contracts/')
+  return res.data
+}
+
+export const createContract = async (data: {
+  property: string; acquereur: string; contract_type: string; notes?: string; agreed_price: number
+}) => {
+  const res = await api.post('/contracts/', data)
+  return res.data
+}
+
+export const signContract = async (id: string) => {
+  const res = await api.patch(`/contracts/${id}/sign/`)
+  return res.data
+}
+
+export const getContractPdf = async (id: string) => {
+  const res = await api.get(`/contracts/${id}/pdf/`, { responseType: 'blob' })
+  return res.data
+}
 
 export default api

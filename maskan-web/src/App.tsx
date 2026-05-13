@@ -22,6 +22,9 @@ import BecomeVendeur from '@/pages/dashboard/BecomeVendeur'
 import VendeurApplications from '@/pages/dashboard/VendeurApplications'
 import ApplicationFields from '@/pages/dashboard/ApplicationFields'
 import PropertyVerification from '@/pages/dashboard/PropertyVerification'
+import VisitRequests from '@/pages/dashboard/VisitRequests'
+import Contracts from '@/pages/dashboard/Contracts'
+import PurchasedProperties from '@/pages/dashboard/PurchasedProperties'
 
 function ProtectedRoute({ children, requireVendeur = false, requireAdmin = false }: {
   children: React.ReactNode
@@ -103,6 +106,9 @@ export default function App() {
                 </ProtectedRoute>
               } />
               <Route path="saved" element={<SavedProperties />} />
+              <Route path="visit-requests" element={<VisitRequests />} />
+              <Route path="contracts" element={<Contracts />} />
+              <Route path="purchased" element={<PurchasedProperties />} />
               <Route path="profile" element={<Profile />} />
               <Route path="settings" element={<Settings />} />
               <Route path="become-vendeur" element={<BecomeVendeur />} />

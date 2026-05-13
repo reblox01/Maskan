@@ -36,6 +36,8 @@ INSTALLED_APPS = [
     # Local
     "apps.accounts",
     "apps.properties",
+    "apps.favorites",
+    "apps.contracts",
 ]
 
 MIDDLEWARE = [

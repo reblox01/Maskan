@@ -211,3 +211,55 @@ export interface PropertyVerificationRequest {
   action: "approve" | "reject"
   rejection_reason?: string
 }
+
+export interface Favorite {
+  id: string
+  property: string
+  property_title: string
+  property_city: string
+  property_price: number
+  property_type: string
+  property_image_url: string | null
+  created_at: string
+}
+
+export type VisitRequestStatus = "pending" | "confirmed" | "completed" | "cancelled" | "rejected"
+
+export interface VisitRequest {
+  id: string
+  related_property: {
+    id: string
+    title: string
+    address: string
+    city: string
+  }
+  client: {
+    id: string
+    username: string
+    email: string
+    phone: string
+  }
+  scheduled_date: string
+  status: VisitRequestStatus
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Contract {
+  id: string
+  property: string
+  property_title?: string
+  property_address?: string
+  acquereur: string
+  acquereur_name?: string
+  vendeur: string
+  vendeur_name?: string
+  contract_type: "sale" | "rental"
+  status: "draft" | "signed_by_vendeur" | "completed" | "cancelled"
+  terms: string
+  agreed_price: number
+  notes?: string
+  created_at: string
+  updated_at: string
+}

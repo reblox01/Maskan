@@ -1,9 +1,12 @@
-import { useState, memo } from 'react'
+import { useState, memo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { useGSAP } from '@gsap/react'
+import gsap from 'gsap'
 import { BedDouble, Bath, Maximize, MapPin, Heart, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn, formatPrice, formatMonthlyPayment } from '@/lib/utils'
+import { toggleFavorite } from '@/lib/api'
 import type { Property } from '@/types'
 
 const statusConfig = {
@@ -40,6 +43,7 @@ function PropertyCard({ property, index = 0 }: PropertyCardProps) {
   const [currentImage, setCurrentImage] = useState(0)
   const [isHovered, setIsHovered] = useState(false)
   const [isFavorited, setIsFavorited] = useState(false)
+  const heartRef = useRef<HTMLButtonElement>(null)
 
   const images = property.images?.length
     ? property.images.map((img) => img.image_url)
@@ -49,6 +53,13 @@ function PropertyCard({ property, index = 0 }: PropertyCardProps) {
 
   const status = statusConfig[property.status] || statusConfig.available
   const typeLabel = typeLabels[property.property_type] || property.property_type
+
+  useGSAP(() => {
+    if (!heartRef.current) return
+    if (isFavorited) {
+      gsap.fromTo(heartRef.current, { scale: 1 }, { scale: 1.3, duration: 0.15, yoyo: true, repeat: 1, ease: 'power2.out' })
+    }
+  }, [isFavorited])
 
   const nextImage = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -62,10 +73,15 @@ function PropertyCard({ property, index = 0 }: PropertyCardProps) {
     setCurrentImage((prev) => (prev - 1 + images.length) % images.length)
   }
 
-  const toggleFavorite = (e: React.MouseEvent) => {
+  const handleToggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    setIsFavorited(!isFavorited)
+    try {
+      const res = await toggleFavorite(property.id)
+      setIsFavorited(res.favorited)
+    } catch {
+      setIsFavorited(false)
+    }
   }
 
   return (
@@ -108,7 +124,8 @@ function PropertyCard({ property, index = 0 }: PropertyCardProps) {
 
             {/* Favorite Button */}
             <button
-              onClick={toggleFavorite}
+              ref={heartRef}
+              onClick={handleToggleFavorite}
               className={cn(
                 "absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer",
                 isFavorited ? "bg-red-500 text-white" : "bg-white/80 text-slate-600 hover:bg-white"

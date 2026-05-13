@@ -5,7 +5,7 @@ import re
 from PIL import Image
 from django.utils.html import strip_tags
 from rest_framework import serializers
-from .models import Property, PropertyImage
+from .models import Property, PropertyImage, VisitRequest, ConsultingRequest
 
 ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "WEBP", "GIF"}
 
@@ -468,13 +468,13 @@ class PropertyAdminDetailSerializer(serializers.ModelSerializer):
 
 class VisitRequestSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Property
-        from .models import VisitRequest
+        model = VisitRequest
         fields = [
-            "id", "property", "client", "scheduled_date", "status", 
+            "id", "related_property", "client", "scheduled_date", "status",
             "notes", "created_at", "updated_at"
         ]
-    
+        read_only_fields = ["client", "related_property", "status"]
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data["client"] = {
@@ -483,7 +483,7 @@ class VisitRequestSerializer(serializers.ModelSerializer):
             "email": instance.client.email,
             "phone": instance.client.phone,
         }
-        data["property"] = {
+        data["related_property"] = {
             "id": str(instance.related_property.id),
             "title": instance.related_property.title,
             "address": instance.related_property.address,
@@ -494,14 +494,14 @@ class VisitRequestSerializer(serializers.ModelSerializer):
 
 class ConsultingRequestSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Property
-        from .models import ConsultingRequest
+        model = ConsultingRequest
         fields = [
-            "id", "property", "client", "consulting_type", "is_free", "price",
+            "id", "related_property", "client", "consulting_type", "is_free", "price",
             "scheduled_date", "status", "client_notes", "admin_response",
             "created_at", "updated_at"
         ]
-    
+        read_only_fields = ["client"]
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data["client"] = {
@@ -511,7 +511,7 @@ class ConsultingRequestSerializer(serializers.ModelSerializer):
             "phone": instance.client.phone,
         }
         if instance.related_property:
-            data["property"] = {
+            data["related_property"] = {
                 "id": str(instance.related_property.id),
                 "title": instance.related_property.title,
                 "address": instance.related_property.address,

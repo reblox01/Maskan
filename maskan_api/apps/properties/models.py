@@ -205,10 +205,12 @@ class VisitRequest(models.Model):
         CONFIRMED = "confirmed", "Confirmé"
         COMPLETED = "completed", "Terminé"
         CANCELLED = "cancelled", "Annulé"
+        REJECTED = "rejected", "Refusé"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     related_property = models.ForeignKey(
-        Property, on_delete=models.CASCADE, related_name="visit_requests"
+        Property, on_delete=models.CASCADE, related_name="visit_requests",
+        db_column="property_id",
     )
     client = models.ForeignKey(
         "accounts.User", on_delete=models.CASCADE, related_name="visit_requests"
@@ -222,8 +224,8 @@ class VisitRequest(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        db_table = "visits_visitrequest"
         ordering = ["-created_at"]
-        unique_together = ["related_property", "client", "status"]
 
     def __str__(self):
         return f"Visit request by {self.client.username} for {self.related_property.title}"

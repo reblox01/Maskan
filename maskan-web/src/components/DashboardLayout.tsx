@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Building2, Users, BarChart3, Heart,
   User, Settings, LogOut, Menu, X, ChevronRight,
   Home, PanelLeftClose, PanelLeft, UserPlus, ClipboardList, ToggleLeft,
-  ShieldCheck, ArrowLeftRight,
+  ShieldCheck, ArrowLeftRight, Calendar, FileText,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -52,7 +52,8 @@ export default function DashboardLayout() {
   }
 
   const role = user.role
-  const currentMode = user.current_mode || role
+  const validModes = ['acquereur', 'vendeur', 'admin']
+  const currentMode = validModes.includes(user.current_mode) ? user.current_mode : role
   const isAdmin = role === 'admin'
   const isVendeur = role === 'vendeur'
   const isVendeurActive = currentMode === 'vendeur'
@@ -64,6 +65,9 @@ export default function DashboardLayout() {
     { to: '/dashboard/properties', icon: Building2, label: 'Mes biens', modes: ['admin', 'vendeur'] },
     { to: '/dashboard/add-property', icon: Building2, label: 'Ajouter un bien', modes: ['admin', 'vendeur'] },
     { to: '/dashboard/saved', icon: Heart, label: 'Favoris', modes: ['acquereur', 'admin'] },
+    { to: '/dashboard/visit-requests', icon: Calendar, label: 'Visites', modes: ['admin', 'vendeur', 'acquereur'] },
+    { to: '/dashboard/contracts', icon: FileText, label: 'Contrats', modes: ['admin', 'vendeur', 'acquereur'] },
+    { to: '/dashboard/purchased', icon: Home, label: 'Mes achats', modes: ['acquereur'] },
     { to: '/dashboard/stats', icon: BarChart3, label: 'Statistiques', modes: ['admin', 'vendeur'] },
     { to: '/dashboard/become-vendeur', icon: UserPlus, label: 'Devenir vendeur', modes: ['acquereur'] },
   ].filter(item => item.modes.includes(effectiveMode))

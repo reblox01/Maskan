@@ -10,7 +10,7 @@ from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
 
 from apps.accounts.permissions import IsVendeur, IsOwner
-from .models import Property
+from .models import Property, VisitRequest
 from .serializers import (
     PropertyListSerializer,
     PropertyDetailSerializer,
@@ -18,6 +18,7 @@ from .serializers import (
     PropertyVerificationSerializer,
     PropertyAdminListSerializer,
     PropertyAdminDetailSerializer,
+    VisitRequestSerializer,
     EstimateInputSerializer,
     EstimateOutputSerializer,
 )
@@ -71,12 +72,16 @@ class PropertyViewSet(viewsets.ModelViewSet):
         
         qs = Property.objects.select_related("agent").prefetch_related(image_prefetch).defer("agent__avatar")
         
-        if self.action == "list":
+        public_listing = ["list", "featured", "cities", "regions", "map_pins"]
+        if self.action in public_listing:
+            qs = qs.filter(verification_status="approved", is_published=True)
+        elif self.action == "retrieve":
             qs = qs.filter(verification_status="approved")
         elif self.action in ("update", "partial_update") and self.request.user.is_authenticated:
             qs = qs.filter(agent=self.request.user)
         elif self.action == "my_properties" and self.request.user.is_authenticated:
-            qs = qs.filter(agent=self.request.user)
+            if self.request.user.role != "admin":
+                qs = qs.filter(agent=self.request.user)
             
         return qs
 
@@ -92,7 +97,7 @@ class PropertyViewSet(viewsets.ModelViewSet):
         return PropertyDetailSerializer
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve", "featured", "cities", "regions", "map_pins"):
+        if self.action in ("list", "retrieve", "featured", "cities", "regions", "map_pins", "booked_dates"):
             return [permissions.AllowAny()]
         if self.action == "create":
             return [permissions.IsAuthenticated(), IsVendeur()]
@@ -163,6 +168,20 @@ class PropertyViewSet(viewsets.ModelViewSet):
         serializer = PropertyListSerializer(qs, many=True, context=self.get_serializer_context())
         set_cached(cache_key, serializer.data, CACHE_TTL_FEATURED, "properties:featured")
         return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="booked-dates")
+    def booked_dates(self, request, id=None):
+        property_obj = self.get_object()
+        booked = VisitRequest.objects.filter(
+            related_property=property_obj,
+            status__in=["confirmed"],
+        ).values_list("scheduled_date", flat=True)
+        slots = []
+        for b in booked:
+            date_str = b.strftime("%Y-%m-%d")
+            time_str = b.strftime("%H:%M")
+            slots.append({"date": date_str, "time": time_str})
+        return Response(slots)
 
     @action(detail=False, methods=["get"], url_path="cities")
     def cities(self, request):
@@ -391,11 +410,36 @@ class VisitRequestView(APIView):
         if property_obj.verification_status != Property.VerificationStatus.APPROVED:
             return Response({"error": "Vous ne pouvez pas demander une visite pour ce bien."}, status=status.HTTP_400_BAD_REQUEST)
 
-        from .serializers import VisitRequestSerializer
+        if property_obj.status in ["sold", "rented"]:
+            return Response({"error": "Ce bien n'est plus disponible."}, status=status.HTTP_400_BAD_REQUEST)
+
+        scheduled_date = request.data.get("scheduled_date")
+        if not scheduled_date:
+            return Response({"error": "La date est requise."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from datetime import datetime
+        try:
+            parsed_date = datetime.fromisoformat(scheduled_date.replace("Z", "+00:00")).date()
+        except (ValueError, TypeError):
+            return Response({"error": "Format de date invalide."}, status=status.HTTP_400_BAD_REQUEST)
+
+        existing = VisitRequest.objects.filter(
+            related_property=property_obj,
+            client=request.user,
+            scheduled_date__date=parsed_date,
+            status__in=["pending", "confirmed"],
+        ).exists()
+
+        if existing:
+            return Response(
+                {"error": "Vous avez déjà une demande de visite pour ce créneau."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         serializer = VisitRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        visit = serializer.save(property=property_obj, client=request.user)
+        visit = serializer.save(related_property=property_obj, client=request.user)
         return Response(VisitRequestSerializer(visit).data, status=status.HTTP_201_CREATED)
 
     def get(self, request, pk):
@@ -414,10 +458,11 @@ class MyVisitRequestsView(APIView):
 
     def get(self, request):
         user = request.user
-        if user.role == "vendeur":
-            from apps.properties.models import Property
+        if user.role == "admin":
+            visits = VisitRequest.objects.all()
+        elif user.role == "vendeur":
             my_properties = Property.objects.filter(agent=user)
-            visits = VisitRequest.objects.filter(property__in=my_properties)
+            visits = VisitRequest.objects.filter(related_property__in=my_properties)
         else:
             visits = VisitRequest.objects.filter(client=user)
         
@@ -427,19 +472,57 @@ class MyVisitRequestsView(APIView):
     def patch(self, request):
         visit_id = request.data.get("id")
         new_status = request.data.get("status")
-        
+
+        if new_status not in ["confirmed", "cancelled", "completed", "rejected"]:
+            return Response({"error": "Statut invalide."}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
-            visit = VisitRequest.objects.get(id=visit_id, property__agent=request.user)
+            visit = VisitRequest.objects.get(id=visit_id)
         except VisitRequest.DoesNotExist:
             return Response({"error": "Demande non trouvée."}, status=status.HTTP_404_NOT_FOUND)
 
-        if new_status in ["confirmed", "cancelled", "completed"]:
-            visit.status = new_status
-            visit.save()
-            serializer = VisitRequestSerializer(visit)
-            return Response(serializer.data)
-        
-        return Response({"error": "Statut invalide."}, status=status.HTTP_400_BAD_REQUEST)
+        user = request.user
+        is_agent = visit.related_property.agent == user
+        is_client = visit.client == user
+
+        if is_agent:
+            VisitRequest.objects.filter(id=visit_id).update(
+                status=new_status, updated_at=tz.now()
+            )
+        elif is_client and new_status == "cancelled" and visit.status == "pending":
+            VisitRequest.objects.filter(id=visit_id).update(
+                status=new_status, updated_at=tz.now()
+            )
+        else:
+            return Response({"error": "Action non autorisée."}, status=status.HTTP_403_FORBIDDEN)
+
+        visit.refresh_from_db()
+        serializer = VisitRequestSerializer(visit)
+        return Response(serializer.data)
+
+
+class SoldPropertiesView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from apps.contracts.models import Contract
+        user = request.user
+        if user.role == "vendeur" or user.role == "admin":
+            sold = Property.objects.filter(
+                status="sold",
+                agent=user if user.role != "admin" else None,
+            ).select_related("agent")
+            if user.role == "admin":
+                sold = Property.objects.filter(status="sold").select_related("agent")
+        else:
+            sold_ids = Contract.objects.filter(
+                acquereur=user, status="completed"
+            ).values_list("property_id", flat=True)
+            sold = Property.objects.filter(id__in=sold_ids)
+
+        from .serializers import PropertyListSerializer
+        serializer = PropertyListSerializer(sold, many=True)
+        return Response(serializer.data)
 
 
 class ConsultingRequestView(APIView):

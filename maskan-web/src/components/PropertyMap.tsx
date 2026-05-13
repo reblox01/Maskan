@@ -133,6 +133,10 @@ export default function PropertyMap({
   return (
     <>
       <style>{`
+        .maskan-map-wrapper { position: relative; z-index: 0; isolation: isolate; }
+        .maskan-map-wrapper .leaflet-pane { z-index: 1; }
+        .maskan-map-wrapper .leaflet-top,
+        .maskan-map-wrapper .leaflet-bottom { z-index: 2; }
         .maskan-popup .leaflet-popup-content-wrapper {
           border-radius: 12px;
           padding: 0;
@@ -167,7 +171,7 @@ export default function PropertyMap({
           50% { filter: drop-shadow(0 0 8px rgba(15, 118, 110, 0.5)); }
         }
       `}</style>
-      <div className={`rounded-xl overflow-hidden border border-slate-200 ${className}`} style={{ height }}>
+      <div className={`maskan-map-wrapper rounded-xl overflow-hidden border border-slate-200 ${className}`} style={{ height }}>
         <MapContainer
           center={center}
           zoom={zoom}
