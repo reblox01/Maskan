@@ -21,7 +21,7 @@ Thumbs.db
 .opencode
 .github
 .venv/
-
+.agents
 # Env files
 .env
 .env.*

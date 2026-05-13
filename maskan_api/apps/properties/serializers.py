@@ -518,3 +518,37 @@ class ConsultingRequestSerializer(serializers.ModelSerializer):
                 "city": instance.related_property.city,
             }
         return data
+
+
+class EstimateInputSerializer(serializers.Serializer):
+    ville = serializers.CharField(max_length=100, required=True)
+    quartier = serializers.CharField(max_length=100, required=True)
+    type_de_bien = serializers.CharField(max_length=50, required=True)
+
+    def validate_ville(self, value):
+        return value.strip().title()
+
+    def validate_quartier(self, value):
+        return value.strip().title()
+
+    def validate_type_de_bien(self, value):
+        value = value.strip().lower()
+        valid_types = ["appartement", "maison", "villa", "riad", "duplex", "studio"]
+        if value not in valid_types:
+            raise serializers.ValidationError(
+                f"Type de bien invalide. Choisissez parmi: {', '.join(valid_types)}"
+            )
+        return value
+
+
+class EstimateOutputSerializer(serializers.Serializer):
+    prix_m2_moyen = serializers.IntegerField()
+    fourchette_basse = serializers.IntegerField()
+    fourchette_haute = serializers.IntegerField()
+    devise = serializers.CharField(default="MAD")
+    modele = serializers.CharField(read_only=True)
+    source = serializers.CharField(read_only=True)
+    annee_reference = serializers.CharField(read_only=True)
+    niveau_confiance = serializers.CharField(read_only=True)
+    nb_annonces = serializers.IntegerField(read_only=True, required=False, allow_null=True)
+    disclaimer = serializers.CharField(read_only=True)

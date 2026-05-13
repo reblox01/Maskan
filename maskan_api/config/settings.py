@@ -220,3 +220,15 @@ CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", "https://fonts.googleapis.com")
 CSP_FONT_SRC = ("'self'", "https://fonts.gstatic.com")
 CSP_IMG_SRC = ("'self'", "data:", "https:")
 CSP_SCRIPT_SRC = ("'self'",)
+
+# ---------------------------------------------------------------------------
+# OpenRouter AI Estimation
+# ---------------------------------------------------------------------------
+OPENROUTER_API_KEY = config("OPENROUTER_API_KEY", default="")
+OPENROUTER_MODEL = config("OPENROUTER_MODEL", default="liquid/lfm-2.5-1.2b-instruct:free")
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# ---------------------------------------------------------------------------
+# Tavily Web Search (fallback when DuckDuckGo fails)
+# ---------------------------------------------------------------------------
+TAVILY_API_KEY = config("TAVILY_API_KEY", default="")

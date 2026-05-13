@@ -5,7 +5,7 @@ import {
   Building2, MapPin, DollarSign, Ruler, BedDouble, Bath, Image,
   ArrowRight, ArrowLeft, Check, FileText, Map, Home as HomeIcon, Loader2,
 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -40,7 +40,7 @@ export default function AddProperty() {
   const [searchParams] = useSearchParams()
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
+  const [, setError] = useState('')
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({})

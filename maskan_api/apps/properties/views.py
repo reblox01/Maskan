@@ -18,6 +18,8 @@ from .serializers import (
     PropertyVerificationSerializer,
     PropertyAdminListSerializer,
     PropertyAdminDetailSerializer,
+    EstimateInputSerializer,
+    EstimateOutputSerializer,
 )
 from .filters import PropertyFilter, validate_and_sanitize_params, validate_numeric_ranges
 from .cache import (
@@ -481,6 +483,313 @@ class ConsultingRequestView(APIView):
             return Response(serializer.data)
         
         return Response({"error": "Statut invalide."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PropertyEstimateView(APIView):
+    """
+    Public endpoint: estimates price per m² via OpenRouter AI.
+    Accepts ville, quartier, type_de_bien → returns prix_m2_moyen + fourchette.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def _get_real_properties_context(self, ville: str, quartier: str, type_de_bien: str) -> tuple:
+        from .models import Property
+
+        qs = Property.objects.filter(
+            verification_status="approved",
+            city__iexact=ville,
+        ).exclude(price__isnull=True).exclude(area_sqm__isnull=True).exclude(area_sqm=0)
+
+        if type_de_bien == "appartement":
+            qs = qs.filter(property_type__in=["apartment", "appartement"])
+        elif type_de_bien == "maison":
+            qs = qs.filter(property_type__in=["house", "maison"])
+        elif type_de_bien == "villa":
+            qs = qs.filter(property_type__in=["villa"])
+        elif type_de_bien == "riad":
+            qs = qs.filter(property_type__in=["riad"])
+        elif type_de_bien == "studio":
+            qs = qs.filter(property_type__in=["studio"])
+
+        qs = qs[:20]
+
+        if not qs.exists():
+            return [], 0
+
+        rows = []
+        for p in qs:
+            area = float(p.area_sqm or 1)
+            price_m2 = float(p.price) / area
+            rows.append({
+                "prix": float(p.price),
+                "surface": area,
+                "prix_m2": round(price_m2, 0),
+                "quartier": p.neighborhood or p.city or "",
+                "annee_annonce": str(p.created_at.year) if p.created_at else "N/A",
+            })
+
+        return rows, len(rows)
+
+    def _web_search(self, query: str, max_results: int = 5) -> list[dict]:
+        import json
+        import urllib.request
+        import urllib.error
+
+        results = []
+
+        # 1. Try DuckDuckGo (free) - fast fail
+        try:
+            from duckduckgo_search import DDGS
+            with DDGS(timeout=4) as ddgs:
+                for i, r in enumerate(ddgs.text(query, max_results=max_results)):
+                    results.append({
+                        "title": r.get("title", ""),
+                        "snippet": r.get("body", ""),
+                        "url": r.get("href", ""),
+                        "source": "DuckDuckGo",
+                    })
+            if results:
+                return results
+        except Exception:
+            pass
+
+        # 2. Fallback to Tavily
+        from django.conf import settings
+        tavily_key = settings.TAVILY_API_KEY
+        if tavily_key:
+            try:
+                payload = json.dumps({
+                    "api_key": tavily_key,
+                    "query": query,
+                    "max_results": max_results,
+                }).encode("utf-8")
+                req = urllib.request.Request(
+                    "https://api.tavily.com/search",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=6) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                for r in data.get("results", []):
+                    results.append({
+                        "title": r.get("title", ""),
+                        "snippet": r.get("content", ""),
+                        "url": r.get("url", ""),
+                        "source": "Tavily",
+                    })
+            except Exception:
+                pass
+
+        return results
+
+    def post(self, request):
+        serializer = EstimateInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        ville = serializer.validated_data["ville"]
+        quartier = serializer.validated_data["quartier"]
+        type_de_bien = serializer.validated_data["type_de_bien"]
+
+        try:
+            real_properties, nb_annonces = self._get_real_properties_context(
+                ville, quartier, type_de_bien
+            )
+
+            web_results = []
+            source_label = "Base de connaissances IA (données d'entraînement)"
+
+            if nb_annonces > 0:
+                source_label = "Annonces réelles sur Maskan"
+            else:
+                search_query = f"prix m² {type_de_bien} {ville} {quartier} Maroc 2026 immobilier"
+                web_results = self._web_search(search_query)
+                if web_results:
+                    source_label = "Recherche web temps réel"
+
+            result = self._query_openrouter(
+                ville, quartier, type_de_bien, real_properties, web_results
+            )
+
+            output = EstimateOutputSerializer({
+                **result,
+                "modele": self._get_model_name(),
+                "nb_annonces": nb_annonces,
+                "source": source_label,
+                "disclaimer": "Estimation indicative. Les prix réels peuvent varier selon l'état du bien, l'étage, les finitions, et les conditions du marché.",
+            })
+            return Response(output.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {"error": f"Erreur lors de l'estimation: {str(e)}"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+    def _get_model_name(self):
+        from django.conf import settings
+        return settings.OPENROUTER_MODEL
+
+    def _query_openrouter(self, ville: str, quartier: str, type_de_bien: str,
+                           real_properties: list[dict], web_results: list[dict] | None = None) -> dict:
+        import json
+        import urllib.request
+        import urllib.error
+        import time
+        from django.conf import settings
+
+        api_key = settings.OPENROUTER_API_KEY
+        if not api_key:
+            raise ValueError("Clé API OpenRouter non configurée.")
+
+        configured_model = settings.OPENROUTER_MODEL
+        fallback_models = [
+            configured_model,
+            "liquid/lfm-2.5-1.2b-instruct:free",
+            "openrouter/free",
+        ]
+        seen = set()
+        models_to_try = [m for m in fallback_models if not (m in seen or seen.add(m))]
+
+        url = settings.OPENROUTER_BASE_URL
+
+        context_blocks = []
+
+        if real_properties:
+            rows = "\n".join(
+                f"  - {p['prix_m2']} MAD/m² (prix total: {p['prix']} MAD, "
+                f"surface: {p['surface']}m², quartier: {p['quartier']}, annonce: {p['annee_annonce']})"
+                for p in real_properties[:15]
+            )
+            context_blocks.append(f"""
+Voici des ANNONCES RÉELLES de {type_de_bien}s actuellement en vente à {ville}, quartier {quartier} ou ses environs (données de la plateforme Maskan) :
+{rows}
+""")
+
+        if web_results:
+            web_rows = "\n".join(
+                f"  - {r['snippet'][:200]} [Source: {r.get('source','web')}]"
+                for r in web_results[:5]
+            )
+            context_blocks.append(f"""
+Voici des RÉSULTATS DE RECHERCHE WEB en temps réel pour les prix immobiliers à {ville} :
+{web_rows}
+""")
+
+        context_str = "\n".join(context_blocks)
+
+        prompt = f"""Tu es un expert en immobilier au Maroc.
+
+{context_str}
+Donne le prix moyen au m² pour un {type_de_bien} à {ville}, quartier {quartier}.
+
+Réponds UNIQUEMENT par un objet JSON valide, sans texte avant ni après :
+{{
+  "prix_m2_moyen": <nombre entier, en MAD>,
+  "fourchette_basse": <nombre entier, en MAD>,
+  "fourchette_haute": <nombre entier, en MAD>,
+  "devise": "MAD",
+  "annee_reference": "<année des données utilisées, ex: 2026>",
+  "niveau_confiance": "<Élevé si basé sur annonces récentes | Moyen si données partielles | Faible si estimation générale>"
+}}"""
+
+        last_error = None
+
+        for model in models_to_try:
+            payload = json.dumps({
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1,
+                "max_tokens": 600,
+            }).encode("utf-8")
+
+            req = urllib.request.Request(
+                url,
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                    "HTTP-Referer": "https://maskan.ma",
+                    "X-Title": "Maskan Estimation",
+                },
+                method="POST",
+            )
+
+            try:
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    body = resp.read().decode("utf-8")
+                    data = json.loads(body)
+            except urllib.error.HTTPError as e:
+                error_body = e.read().decode("utf-8", errors="replace")
+                last_error = RuntimeError(f"OpenRouter {model} HTTP {e.code}: {error_body}")
+                continue
+            except urllib.error.URLError as e:
+                last_error = RuntimeError(f"OpenRouter {model} connection error: {e.reason}")
+                continue
+            except json.JSONDecodeError:
+                last_error = RuntimeError(f"OpenRouter {model}: réponse JSON invalide.")
+                continue
+
+            try:
+                message = data["choices"][0]["message"]
+                content = message.get("content") or message.get("reasoning") or ""
+                if not content:
+                    snippet = json.dumps(data, ensure_ascii=False)[:500]
+                    last_error = RuntimeError(
+                        f"Réponse IA vide de {model}. Réponse: {snippet}"
+                    )
+                    continue
+
+                content = content.strip()
+                if "```" in content:
+                    content = content.split("```", 1)[-1]
+                    content = content.rsplit("```", 1)[0]
+                json_start = content.find("{")
+                json_end = content.rfind("}")
+                if json_start != -1 and json_end != -1 and json_end > json_start:
+                    content = content[json_start:json_end + 1]
+                result = json.loads(content.strip())
+
+                confiance = result.get("niveau_confiance", "Faible")
+                if real_properties:
+                    if confiance not in ("Élevé", "Moyen", "Faible"):
+                        confiance = "Moyen"
+                elif web_results:
+                    confiance = "Moyen" if confiance == "Élevé" else "Faible"
+                else:
+                    confiance = "Faible"
+
+                prix = int(result.get("prix_m2_moyen", 0))
+                low = int(result.get("fourchette_basse", 0))
+                high = int(result.get("fourchette_haute", 0))
+
+                # Sanity check: minimum reasonable price per m² in Morocco
+                MIN_PRICE_M2 = 2000
+                if prix < MIN_PRICE_M2:
+                    prix = max(low, MIN_PRICE_M2)
+                if low < MIN_PRICE_M2:
+                    low = MIN_PRICE_M2
+                if high < low:
+                    high = low * 2
+
+                return {
+                    "prix_m2_moyen": prix,
+                    "fourchette_basse": low,
+                    "fourchette_haute": high,
+                    "devise": result.get("devise", "MAD"),
+                    "annee_reference": result.get("annee_reference", "N/A"),
+                    "niveau_confiance": confiance,
+                }
+
+            except (KeyError, IndexError, json.JSONDecodeError) as e:
+                snippet = json.dumps(data, ensure_ascii=False)[:500]
+                last_error = RuntimeError(
+                    f"{model}: impossible d'extraire les données: {e}. Réponse: {snippet}"
+                )
+                continue
+
+        raise last_error or RuntimeError("Aucun modèle OpenRouter disponible.")
 
 
 class PropertyImageServeView(APIView):
