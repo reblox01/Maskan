@@ -21,6 +21,8 @@ interface RegisterData {
   role?: string
 }
 
+const API_BASE = import.meta.env.VITE_API_URL || ""
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -43,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const res = await axios.get('/api/auth/profile/', {
+      const res = await axios.get(`${API_BASE}/api/auth/profile/`, {
         headers: { Authorization: `Bearer ${access}` }
       })
       setUser(res.data)
@@ -52,13 +54,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err: unknown) {
       if (refresh && (err as { response?: { status?: number } }).response?.status === 401) {
         try {
-          const res = await axios.post('/api/auth/token/refresh/', { refresh })
+          const res = await axios.post(`${API_BASE}/api/auth/token/refresh/`, { refresh })
           const newAccess = res.data.access
           localStorage.setItem('access_token', newAccess)
           if (res.data.refresh) {
             localStorage.setItem('refresh_token', res.data.refresh)
           }
-          const profileRes = await axios.get('/api/auth/profile/', {
+          const profileRes = await axios.get(`${API_BASE}/api/auth/profile/`, {
             headers: { Authorization: `Bearer ${newAccess}` }
           })
           setUser(profileRes.data)
@@ -79,14 +81,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchProfile])
 
   const login = async (email: string, password: string) => {
-    const res = await axios.post('/api/auth/login/', { email, password })
+    const res = await axios.post(`${API_BASE}/api/auth/login/`, { email, password })
     localStorage.setItem('access_token', res.data.access)
     localStorage.setItem('refresh_token', res.data.refresh)
     setUser(res.data.user)
   }
 
   const register = async (data: RegisterData) => {
-    const res = await axios.post('/api/auth/register/', data)
+    const res = await axios.post(`${API_BASE}/api/auth/register/`, data)
     localStorage.setItem('access_token', res.data.access)
     localStorage.setItem('refresh_token', res.data.refresh)
     setUser(res.data.user)
@@ -96,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const refresh = localStorage.getItem('refresh_token')
       if (refresh) {
-        await axios.post('/api/auth/logout/', { refresh })
+        await axios.post(`${API_BASE}/api/auth/logout/`, { refresh })
       }
     } catch {
       // ignore
