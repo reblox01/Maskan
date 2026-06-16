@@ -23,7 +23,7 @@ import {
 import PropertyMap from '@/components/PropertyMap'
 import { usePropertyDetail } from '@/hooks/useProperties'
 import { cn, formatPrice, formatMonthlyPayment } from '@/lib/utils'
-import { toggleFavorite, createVisitRequest, getBookedDates } from '@/lib/api'
+import { toggleFavorite, createVisitRequest, getBookedDates, getImageUrl } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { toast } from 'sonner'
 
@@ -162,7 +162,7 @@ export default function PropertyDetail() {
   }
 
   const images = property.images?.length
-    ? property.images.map((img) => img.image_url)
+    ? property.images.map((img) => getImageUrl(img.image_url) || img.image_url)
     : placeholderImages
 
   const typeLabel = typeLabels[property.property_type] || property.property_type

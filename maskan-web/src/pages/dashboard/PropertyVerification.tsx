@@ -9,7 +9,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from '@/hooks/useToast'
-import api from '@/lib/api'
+import api, { getImageUrl } from '@/lib/api'
 import type { PropertyAdminItem, PropertyAdminDetail, VerificationStatus } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -275,7 +275,7 @@ export default function PropertyVerification() {
                       {selectedProperty.images.slice(0, 4).map((img) => (
                         <div key={img.id} className="aspect-square rounded-lg bg-slate-100 overflow-hidden">
                           <img
-                            src={img.image_url}
+                            src={getImageUrl(img.image_url) || img.image_url}
                             alt=""
                             className="w-full h-full object-cover"
                           />

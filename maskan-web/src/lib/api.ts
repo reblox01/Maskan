@@ -141,4 +141,11 @@ export const getContractPdf = async (id: string) => {
   return res.data
 }
 
+export const getImageUrl = (url?: string | null): string | undefined => {
+  if (!url) return undefined
+  if (url.startsWith("http")) return url
+  const base = import.meta.env.VITE_API_URL || ""
+  return `${base}${url}`
+}
+
 export default api

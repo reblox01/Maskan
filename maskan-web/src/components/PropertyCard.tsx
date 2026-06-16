@@ -6,7 +6,7 @@ import gsap from 'gsap'
 import { BedDouble, Bath, Maximize, MapPin, Heart, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn, formatPrice, formatMonthlyPayment } from '@/lib/utils'
-import { toggleFavorite } from '@/lib/api'
+import { toggleFavorite, getImageUrl } from '@/lib/api'
 import type { Property } from '@/types'
 
 const statusConfig = {
@@ -46,9 +46,9 @@ function PropertyCard({ property, index = 0 }: PropertyCardProps) {
   const heartRef = useRef<HTMLButtonElement>(null)
 
   const images = property.images?.length
-    ? property.images.map((img) => img.image_url)
+    ? property.images.map((img) => getImageUrl(img.image_url) || img.image_url)
     : property.main_image_url 
-      ? [property.main_image_url]
+      ? [getImageUrl(property.main_image_url) || property.main_image_url]
       : [placeholderImages[index % placeholderImages.length]]
 
   const status = statusConfig[property.status] || statusConfig.available

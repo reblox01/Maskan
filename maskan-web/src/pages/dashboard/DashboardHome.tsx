@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/context/AuthContext'
-import api from '@/lib/api'
+import api, { getImageUrl } from '@/lib/api'
 import { cn, formatPrice } from '@/lib/utils'
 
 interface DashboardStats {
@@ -374,7 +374,7 @@ function PurchasedProperties() {
               <Card className="border-0 shadow-card hover:shadow-card-hover transition-shadow overflow-hidden">
                 <div className="aspect-[16/9] bg-slate-100 relative overflow-hidden">
                   <img
-                    src={p.main_image_url || 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&h=300&fit=crop'}
+                    src={getImageUrl(p.main_image_url) || 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&h=300&fit=crop'}
                     alt={p.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />

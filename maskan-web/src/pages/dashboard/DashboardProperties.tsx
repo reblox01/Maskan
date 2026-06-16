@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/hooks/useToast'
-import api from '@/lib/api'
+import api, { getImageUrl } from '@/lib/api'
 import { formatPrice, cn } from '@/lib/utils'
 import type { Property, VerificationStatus } from '@/types'
 
@@ -130,7 +130,7 @@ export default function DashboardProperties() {
             const status = statusConfig[property.status] || statusConfig.available
             const verification = verificationConfig[property.verification_status as VerificationStatus] || verificationConfig.pending
             const VerificationIcon = verification.icon
-            const img = property.main_image_url || property.images?.[0]?.image_url || placeholderImages[property.property_type] || placeholderImages.apartment
+            const img = getImageUrl(property.main_image_url) || getImageUrl(property.images?.[0]?.image_url) || placeholderImages[property.property_type] || placeholderImages.apartment
 
             return (
               <motion.div

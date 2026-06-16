@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator'
 import LocationPicker from '@/components/LocationPicker'
 import ImageUploader from '@/components/ImageUploader'
 import { toast } from '@/hooks/useToast'
-import api from '@/lib/api'
+import api, { getImageUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 const steps = [
@@ -98,7 +98,7 @@ export default function AddProperty() {
       // Load images if they exist
       if (property.images && property.images.length > 0) {
         // Use image_url for existing images, fallback to image_data
-        setImages(property.images.map((img: any) => img.image_url || img.image_data))
+        setImages(property.images.map((img: any) => getImageUrl(img.image_url) || img.image_url || img.image_data))
       }
       console.log('Images loaded into state:', property.images.length)
     } catch (err) {

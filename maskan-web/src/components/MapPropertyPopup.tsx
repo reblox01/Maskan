@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { BedDouble, Bath, Maximize, MapPin, ArrowUpRight } from 'lucide-react'
 import { formatPrice, cn } from '@/lib/utils'
+import { getImageUrl } from '@/lib/api'
 import type { MapPin as MapPinType } from '@/types'
 
 const typeLabels: Record<string, string> = {
@@ -47,7 +48,7 @@ interface MapPropertyPopupProps {
 }
 
 export default function MapPropertyPopup({ pin }: MapPropertyPopupProps) {
-  const imageUrl = pin.main_image_url || placeholderImages[pin.property_type] || placeholderImages.apartment
+  const imageUrl = getImageUrl(pin.main_image_url) || placeholderImages[pin.property_type] || placeholderImages.apartment
 
   const typeLabel = typeLabels[pin.property_type] || pin.property_type
   const statusColor = statusColors[pin.status] || statusColors.available

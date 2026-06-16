@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatPrice } from '@/lib/utils'
-import { getFavorites, toggleFavorite } from '@/lib/api'
+import { getFavorites, toggleFavorite, getImageUrl } from '@/lib/api'
 import type { Favorite } from '@/types'
 
 const placeholderImages: Record<string, string> = {
@@ -100,7 +100,7 @@ export default function SavedProperties() {
                   <div className="flex">
                     <div className="w-32 h-auto flex-shrink-0">
                       <img
-                        src={fav.property_image_url || placeholderImages[fav.property_type] || placeholderImages.apartment}
+                        src={getImageUrl(fav.property_image_url) || placeholderImages[fav.property_type] || placeholderImages.apartment}
                         alt={fav.property_title}
                         className="w-full h-full object-cover rounded-l-xl"
                       />
